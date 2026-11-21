@@ -5,54 +5,92 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Mapas Mentais</title>
 <style>
-  :root{--bg:#1d0f0a;--panel:#2b1710;--ink:#f3e9df;--muted:#b9a596;--accent:#c8862f}
+  :root{--bg:#1d0f0a;--panel:#2b1710;--ink:#f3e9df;--muted:#b9a596;--accent:#c8862f;--line:#4a2b1f}
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
   body{background-image:radial-gradient(circle at 1px 1px,#3a2218 1px,transparent 0);background-size:28px 28px}
   button{background:#3b2117;color:var(--ink);border:1px solid #5a3424;border-radius:8px;padding:7px 11px;font-size:13px;cursor:pointer;white-space:nowrap;font-family:inherit}
   button:hover{background:#4a2a1d}
+  button:disabled{opacity:.45;cursor:not-allowed}
   button.pri{background:var(--accent);border-color:var(--accent);color:#1d0f0a;font-weight:600}
   .hidden{display:none!important}
+  body.ro .ed{display:none!important}
+  input,textarea{font-family:inherit}
 
   /* ---------- tela inicial ---------- */
-  #home{position:absolute;inset:0;overflow-y:auto;padding:48px 24px}
+  #home{position:absolute;inset:0;overflow-y:auto;padding:40px 24px}
   #home .wrap{max-width:900px;margin:0 auto}
-  #home h1{font-size:28px;margin-bottom:6px}
-  #home .sub{color:var(--muted);margin-bottom:28px;font-size:14px}
-  #newRow{display:flex;gap:8px;margin-bottom:28px}
-  #newName{flex:1;background:#2f1a12;border:2px solid #5a3424;border-radius:10px;color:var(--ink);font-size:16px;padding:12px 14px;font-family:inherit}
+  #homeHead{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+  #homeHead h1{font-size:28px;flex:1}
+  #home .sub{color:var(--muted);margin-bottom:24px;font-size:14px}
+  #newRow{display:flex;gap:8px;margin-bottom:24px}
+  #newName{flex:1;background:#2f1a12;border:2px solid #5a3424;border-radius:10px;color:var(--ink);font-size:16px;padding:12px 14px}
   #newName:focus{outline:none;border-color:var(--accent)}
   #newRow button{font-size:15px;padding:0 20px}
   #grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
-  .card{background:var(--panel);border:2px solid #4a2b1f;border-left:6px solid var(--c);border-radius:12px;padding:16px;cursor:pointer;display:flex;flex-direction:column;gap:6px;min-height:110px;transition:transform .1s}
+  .card{background:var(--panel);border:2px solid var(--line);border-left:6px solid var(--c);border-radius:12px;padding:16px;cursor:pointer;display:flex;flex-direction:column;gap:6px;min-height:110px;transition:transform .1s}
   .card:hover{transform:translateY(-2px)}
   .card h3{font-size:17px;word-break:break-word}
   .card .meta{color:var(--muted);font-size:12.5px;flex:1}
   .card .acts{display:flex;gap:6px}
   .card .acts button{padding:4px 9px;font-size:12px}
-  #homeTools{display:flex;gap:8px;margin-top:28px;flex-wrap:wrap}
+  #homeTools{display:flex;gap:8px;margin-top:24px;flex-wrap:wrap}
+  .empty{color:var(--muted);font-size:14px;padding:20px 0}
+
+  /* status da nuvem */
+  .cloud{font-size:12px;color:var(--muted);white-space:nowrap;padding:4px 8px;border-radius:6px;background:#2f1a12;border:1px solid var(--line)}
+  .cloud.ok{color:#9fd39a}.cloud.err{color:#f0948f}.cloud.busy{color:#e9c27a}
 
   /* ---------- editor ---------- */
   #editor{position:absolute;inset:0}
-  #bar{position:fixed;top:0;left:0;right:0;height:52px;display:flex;align-items:center;gap:8px;padding:0 14px;background:var(--panel);border-bottom:1px solid #4a2b1f;z-index:10;overflow-x:auto}
-  #mapTitle{font-size:16px;font-weight:600;margin:0 8px;white-space:nowrap;max-width:260px;overflow:hidden;text-overflow:ellipsis}
-  #colors{display:flex;gap:4px;margin-left:4px}
+  #bar{position:fixed;top:0;left:0;right:0;height:52px;display:flex;align-items:center;gap:7px;padding:0 12px;background:var(--panel);border-bottom:1px solid var(--line);z-index:10;overflow-x:auto}
+  #mapTitle{font-size:16px;font-weight:600;margin:0 6px;white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis}
+  #colors{display:flex;gap:4px}
   #colors span{width:20px;height:20px;border-radius:50%;cursor:pointer;border:2px solid transparent;flex:none}
   #colors span:hover{border-color:#fff}
   #stage{position:absolute;inset:52px 0 0 0;cursor:grab;touch-action:none}
   #stage.panning{cursor:grabbing}
   #world{position:absolute;left:0;top:0;transform-origin:0 0}
   svg#links{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
-  .node{position:absolute;transform:translate(-50%,-50%);padding:9px 14px;border-radius:12px;background:#2f1a12;border:2px solid var(--c,#7a4a33);color:var(--ink);font-size:14px;line-height:1.3;width:max-content;max-width:240px;min-width:40px;text-align:center;cursor:move;user-select:none;box-shadow:0 4px 14px rgba(0,0,0,.35);white-space:pre-wrap;word-break:break-word}
+  .node{position:absolute;transform:translate(-50%,-50%);padding:9px 14px;border-radius:12px;background:#2f1a12;border:2px solid var(--c,#7a4a33);color:var(--ink);font-size:14px;line-height:1.3;width:max-content;max-width:260px;min-width:40px;text-align:center;cursor:move;user-select:none;box-shadow:0 4px 14px rgba(0,0,0,.35);white-space:pre-wrap;word-break:break-word}
+  body.ro .node{cursor:pointer}
   .node.root{font-size:18px;font-weight:700;padding:14px 20px;background:var(--c,#652716);border-color:#f3e9df55}
   .node.lvl1{font-weight:600;background:color-mix(in srgb,var(--c) 30%,#2f1a12)}
   .node.sel{outline:3px solid #fff;outline-offset:2px}
-  .node.done{opacity:.55;text-decoration:line-through}
-  .node[contenteditable=true]{cursor:text;user-select:text;outline:3px solid var(--accent)}
+  .node.done .t{opacity:.55;text-decoration:line-through}
+  .node .ic{margin-right:6px}
+  .node .t[contenteditable=true]{cursor:text;user-select:text;outline:2px solid var(--accent);border-radius:4px;padding:0 3px;display:inline-block;min-width:20px}
+  .node .badges{display:flex;gap:4px;justify-content:center;margin-top:4px}
+  .node .badges span{font-size:11px;background:#00000055;border-radius:6px;padding:1px 6px;cursor:pointer}
   .node .fold{position:absolute;right:-10px;top:50%;transform:translateY(-50%);width:18px;height:18px;border-radius:50%;background:var(--c);color:#1d0f0a;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}
-  #help{position:fixed;right:14px;bottom:14px;background:var(--panel);border:1px solid #4a2b1f;border-radius:10px;padding:12px 14px;font-size:12.5px;color:var(--muted);line-height:1.7;max-width:290px;z-index:10}
+
+  /* menus suspensos */
+  .pop{position:fixed;top:56px;background:var(--panel);border:1px solid #5a3424;border-radius:10px;padding:10px;z-index:30;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+  #iconPop{display:grid;grid-template-columns:repeat(8,34px);gap:4px}
+  #iconPop span{font-size:20px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:6px;cursor:pointer}
+  #iconPop span:hover{background:#4a2a1d}
+  #iconPop button{grid-column:1/-1;margin-top:4px}
+  #exportPop{display:flex;flex-direction:column;gap:6px}
+
+  /* painel de detalhes */
+  #panel{position:fixed;top:52px;right:0;bottom:0;width:330px;background:var(--panel);border-left:1px solid var(--line);z-index:15;display:flex;flex-direction:column;padding:16px;gap:12px;overflow-y:auto}
+  #panel h2{font-size:16px;display:flex;align-items:center;gap:8px}
+  #panel h2 span{flex:1;word-break:break-word}
+  #panel label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+  #note{width:100%;min-height:140px;resize:vertical;background:#2f1a12;border:1px solid #5a3424;border-radius:8px;color:var(--ink);padding:10px;font-size:14px;line-height:1.5}
+  #note:focus{outline:none;border-color:var(--accent)}
+  #noteView{font-size:14px;line-height:1.5;white-space:pre-wrap;color:var(--ink)}
+  #atts{display:flex;flex-direction:column;gap:6px}
+  .att{display:flex;align-items:center;gap:8px;background:#2f1a12;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:13px}
+  .att a{color:#e9c27a;flex:1;word-break:break-all;text-decoration:none}
+  .att a:hover{text-decoration:underline}
+  .att button{padding:2px 7px;font-size:12px}
+  .attBtns{display:flex;gap:6px;flex-wrap:wrap}
+  .hint{font-size:12px;color:var(--muted);line-height:1.5}
+
+  #help{position:fixed;left:14px;bottom:14px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:12.5px;color:var(--muted);line-height:1.7;max-width:310px;z-index:12}
   #help b{color:var(--ink)}
-  #toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--accent);color:#1d0f0a;padding:8px 16px;border-radius:8px;font-weight:600;font-size:13px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:20}
+  #toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--accent);color:#1d0f0a;padding:8px 16px;border-radius:8px;font-weight:600;font-size:13px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:40;max-width:90vw;text-align:center}
   #toast.show{opacity:1}
   input[type=file]{display:none}
 </style>
@@ -62,16 +100,21 @@
 <!-- ===== TELA INICIAL ===== -->
 <div id="home">
   <div class="wrap">
-    <h1>🧠 Mapas Mentais</h1>
-    <p class="sub">Escolha um mapa para abrir ou crie um novo.</p>
-    <div id="newRow">
+    <div id="homeHead">
+      <h1>🧠 Mapas Mentais</h1>
+      <span class="cloud" id="cloudHome"></span>
+      <button id="bLoginHome" class="hidden">🔒 Entrar para editar</button>
+      <button id="bLogoutHome" class="hidden">Sair</button>
+    </div>
+    <p class="sub" id="homeSub">Escolha um mapa para abrir ou crie um novo.</p>
+    <div id="newRow" class="ed">
       <input id="newName" placeholder="Nome do novo mapa (ex.: Site)" maxlength="80">
       <button class="pri" id="bNew">+ Criar mapa</button>
     </div>
     <div id="grid"></div>
     <div id="homeTools">
-      <button id="bExportAll" title="Salve na pasta do projeto e rode publicar.bat">Baixar mapas.json (para publicar)</button>
-      <button id="bImportAll">Abrir .json</button>
+      <button id="bExportAll">Baixar backup (.json)</button>
+      <button id="bImportAll" class="ed">Abrir .json</button>
     </div>
   </div>
 </div>
@@ -81,18 +124,44 @@
   <div id="bar">
     <button id="bBack">← Mapas</button>
     <span id="mapTitle"></span>
-    <button class="pri" id="bAdd" title="Tab">+ Filho</button>
-    <button id="bSib" title="Enter">+ Irmão</button>
-    <button id="bRename" title="F2 ou duplo clique">Renomear</button>
-    <button id="bDone" title="Espaço">✓ Feito</button>
-    <button id="bDel" title="Delete">Apagar</button>
-    <div id="colors"></div>
+    <button class="pri ed" id="bAdd" title="Tab">+ Filho</button>
+    <button class="ed" id="bSib" title="Enter">+ Irmão</button>
+    <button class="ed" id="bRename" title="F2 ou duplo clique">Renomear</button>
+    <button class="ed" id="bIcon">Ícone</button>
+    <button id="bDetails" title="Notas e anexos do tópico">📎 Notas/Anexos</button>
+    <button class="ed" id="bDone" title="Espaço">✓ Feito</button>
+    <button class="ed" id="bDel" title="Delete">Apagar</button>
+    <div id="colors" class="ed"></div>
     <span style="flex:1"></span>
-    <button id="bLayout">Organizar</button>
+    <span class="cloud" id="cloudBar"></span>
+    <button id="bLoginBar" class="hidden">🔒 Entrar</button>
+    <button class="ed" id="bLayout">Organizar</button>
     <button id="bCenter">Centralizar</button>
+    <button id="bExport">Exportar ▾</button>
     <button id="bHelp">?</button>
   </div>
   <div id="stage"><div id="world"><svg id="links"></svg></div></div>
+
+  <div id="iconPop" class="pop hidden"></div>
+  <div id="exportPop" class="pop hidden">
+    <button id="bPng">🖼️ Imagem (PNG)</button>
+    <button id="bPdf">📄 PDF</button>
+  </div>
+
+  <div id="panel" class="hidden">
+    <h2><span id="pTitle"></span><button id="bClosePanel">✕</button></h2>
+    <label>Notas</label>
+    <textarea id="note" class="ed" placeholder="Escreva detalhes, lembretes, links..."></textarea>
+    <div id="noteView" class="hidden"></div>
+    <label>Anexos</label>
+    <div id="atts"></div>
+    <div class="attBtns ed">
+      <button id="bAddLink">🔗 Adicionar link</button>
+      <button id="bAddFile">📁 Enviar arquivo</button>
+    </div>
+    <div class="hint" id="attHint"></div>
+  </div>
+
   <div id="help" class="hidden">
     <b>Clique</b> num tópico para selecionar<br>
     <b>Renomear</b>, <b>F2</b> ou <b>duplo clique</b> muda o texto<br>
@@ -100,21 +169,24 @@
     <b>Espaço</b> marcar como feito · <b>F</b> recolher/expandir ramo<br>
     <b>Arraste</b> tópicos para mover (o ramo vai junto)<br>
     <b>Arraste o fundo</b> para navegar · <b>roda do mouse</b> para zoom<br>
-    Tudo é salvo neste navegador automaticamente.
+    <span id="helpSave"></span>
     <div style="text-align:right;margin-top:6px"><button id="bHideHelp">Ok</button></div>
   </div>
 </div>
 
 <input type="file" id="file" accept=".json,application/json">
+<input type="file" id="attFile">
 <div id="toast"></div>
 
 <script>
-const KEY='mapas-mentais-v2', OLDKEY='mapa-ideias-grecia-v1';
+const KEY='mapas-mentais-v2', OLDKEY='mapa-ideias-grecia-v1', VIEWKEY='mapas-views', PASSKEY='mapas-senha';
 const PALETTE=['#c8862f','#d9534f','#5b9bd5','#6aa84f','#a678c9','#e0b84a','#4fb3a9','#cf6f9a'];
+const ICONS=['⭐','✅','❗','❓','💡','🔥','📌','📅','💰','👤','👥','🎯','🚀','⚠️','🐞','🔧','📝','📚','🎨','💬','❌','🏛️','🌐','📱','💻','🛒','📈','🔒','❤️','👍','⏳','🏁'];
 const $=id=>document.getElementById(id);
 const uid=()=>Math.random().toString(36).slice(2,9);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
-// ---------- mapas iniciais ----------
+// ================= modelo / mapas iniciais =================
 function treeToNodes(t){
   const nodes=[];let id=1;
   (function walk(n,parent){const me=id++;nodes.push({id:me,text:n.text,parent,color:n.color||null,done:false,folded:false,x:0,y:0});(n.children||[]).forEach(c=>walk(c,me))})(t,null);
@@ -137,53 +209,155 @@ function seedGrecia(){
   ],{color:'#652716'});
 }
 function newMap(name,tree){
-  const m={id:uid(),name,nodes:treeToNodes(tree||T(name,[],{color:'#652716'})),view:null,updated:Date.now()};
+  const m={id:uid(),name,nodes:treeToNodes(tree||T(name,[],{color:'#652716'})),updated:Date.now()};
   m.nodes[0].text=name;layoutNodes(m.nodes);return m;
 }
 function seedAll(){const g=newMap('Grécia Antiga',seedGrecia());const s=newMap('Site');s.updated+=1;return [s,g]}
 
-// ---------- armazenamento ----------
+// ================= armazenamento: local + nuvem =================
 let DB={maps:[]};
-function persist(){try{localStorage.setItem(KEY,JSON.stringify(DB))}catch(e){}}
-async function boot(){
-  try{DB=JSON.parse(localStorage.getItem(KEY))||{maps:[]}}catch(e){DB={maps:[]}}
-  if(!DB.maps||!DB.maps.length){
-    DB={maps:[]};
-    try{const r=await fetch('mapas.json',{cache:'no-store'});if(r.ok){const d=await r.json();if(d.maps&&d.maps.length)DB.maps=d.maps}}catch(e){}
-    if(!DB.maps.length){
-      DB.maps=seedAll();
-      // aproveita o mapa da versão anterior (um mapa só), se existir neste navegador
-      try{const old=JSON.parse(localStorage.getItem(OLDKEY));if(old&&old.nodes&&old.nodes.length){
-        const g=DB.maps.find(m=>m.name==='Grécia Antiga');g.nodes=old.nodes;g.nodes.find(n=>n.parent===null).text='Grécia Antiga'}}catch(e){}
-    }
-    persist();
-  }
-  route();
+let CLOUD=null;          // null = sem nuvem (só neste navegador); senão {banco,senha,anexos}
+let REV='0', SENHA=localStorage.getItem(PASSKEY)||'', CAN_EDIT=true;
+let VIEWS={};try{VIEWS=JSON.parse(localStorage.getItem(VIEWKEY))||{}}catch(e){}
+const pending=new Map(); // id do mapa -> timer de envio
+let saving=0, lastErr='';
+
+function persistLocal(){try{localStorage.setItem(KEY,JSON.stringify(DB))}catch(e){}}
+function saveViews(){try{localStorage.setItem(VIEWKEY,JSON.stringify(VIEWS))}catch(e){}}
+function plain(m){return {id:m.id,name:m.name,nodes:m.nodes,updated:m.updated}}
+
+async function api(method,qs='',body,headers={}){
+  const h={...headers};if(SENHA)h['x-senha']=SENHA;
+  if(body!==undefined&&!(body instanceof Blob)){h['Content-Type']='application/json';body=JSON.stringify(body)}
+  const r=await fetch('/api/mapas'+qs,{method,headers:h,body,cache:'no-store'});
+  let j={};try{j=await r.json()}catch(e){}
+  if(!r.ok){const e=new Error(j.erro||('Erro '+r.status));e.status=r.status;throw e}
+  return j;
 }
+
+function setStatus(){
+  let txt,cls;
+  if(!CLOUD){txt='💾 Salvo só neste navegador';cls=''}
+  else if(lastErr){txt='⚠️ '+lastErr;cls='err'}
+  else if(saving||pending.size){txt='☁️ Salvando…';cls='busy'}
+  else if(!CAN_EDIT){txt='👀 Só visualização';cls=''}
+  else{txt='☁️ Salvo na nuvem';cls='ok'}
+  ['cloudHome','cloudBar'].forEach(id=>{const e=$(id);e.textContent=txt;e.className='cloud '+cls});
+  const showLogin=CLOUD&&!CAN_EDIT;
+  $('bLoginHome').classList.toggle('hidden',!showLogin);$('bLoginBar').classList.toggle('hidden',!showLogin);
+  $('bLogoutHome').classList.toggle('hidden',!(CLOUD&&CAN_EDIT));
+  document.body.classList.toggle('ro',!CAN_EDIT);
+  $('helpSave').innerHTML=CLOUD?'Tudo é salvo <b>na nuvem</b> automaticamente.':'Tudo é salvo <b>neste navegador</b> automaticamente.';
+  $('homeSub').textContent=CAN_EDIT?'Escolha um mapa para abrir ou crie um novo.':'Escolha um mapa para ver. Para editar, clique em "Entrar para editar".';
+}
+
+function queueSave(m){
+  persistLocal();
+  if(!CLOUD||!CAN_EDIT)return;
+  clearTimeout(pending.get(m.id));
+  pending.set(m.id,setTimeout(()=>pushMap(m),700));setStatus();
+}
+async function pushMap(m){
+  pending.delete(m.id);saving++;setStatus();
+  try{const j=await api('PUT','',{map:plain(m)});if(+j.rev===+REV+1)REV=j.rev;lastErr=''}
+  catch(e){lastErr=e.status===401?'Senha recusada':'Sem conexão — tentando de novo';if(e.status===401)logout(true);else pending.set(m.id,setTimeout(()=>pushMap(m),5000))}
+  saving--;setStatus();
+}
+async function removeMapCloud(id){
+  if(!CLOUD||!CAN_EDIT)return;
+  try{const j=await api('DELETE','?id='+encodeURIComponent(id));if(+j.rev===+REV+1)REV=j.rev}catch(e){toast('Não consegui apagar na nuvem: '+e.message)}
+}
+
+async function login(){
+  const s=prompt('Senha para editar:');if(!s)return;
+  const old=SENHA;SENHA=s;
+  try{await api('POST','?acao=login');localStorage.setItem(PASSKEY,s);CAN_EDIT=true;lastErr='';toast('Pronto! Agora você pode editar');
+    // primeira vez: nuvem vazia e mapas neste navegador -> envia
+    if(!DB.maps.length){const local=JSON.parse(localStorage.getItem(KEY)||'{"maps":[]}').maps||[];
+      if(local.length&&confirm(`A nuvem está vazia. Enviar os ${local.length} mapas deste navegador para lá?`)){DB.maps=local;local.forEach(m=>pushMap(m))}}
+  }catch(e){SENHA=old;toast(e.message)}
+  setStatus();route();
+}
+function logout(silent){SENHA='';localStorage.removeItem(PASSKEY);CAN_EDIT=false;setStatus();if(!silent)route()}
+$('bLoginHome').onclick=login;$('bLoginBar').onclick=login;$('bLogoutHome').onclick=()=>logout();
+
+async function boot(){
+  // 1) tenta a nuvem (só existe no site publicado com o banco configurado)
+  try{
+    const r=await fetch('/api/mapas',{cache:'no-store'});const j=await r.json();
+    if(r.ok&&j.banco){CLOUD=j;REV=j.rev;DB.maps=j.maps||[];}
+  }catch(e){}
+  if(CLOUD){
+    CAN_EDIT=false;
+    if(SENHA){try{await api('POST','?acao=login');CAN_EDIT=true}catch(e){SENHA='';localStorage.removeItem(PASSKEY)}}
+    persistLocal();setInterval(poll,4000);
+  }else{
+    // 2) modo local
+    try{DB=JSON.parse(localStorage.getItem(KEY))||{maps:[]}}catch(e){DB={maps:[]}}
+    if(!DB.maps||!DB.maps.length){
+      DB={maps:[]};
+      try{const r=await fetch('mapas.json',{cache:'no-store'});if(r.ok){const d=await r.json();if(d.maps&&d.maps.length)DB.maps=d.maps}}catch(e){}
+      if(!DB.maps.length){
+        DB.maps=seedAll();
+        try{const old=JSON.parse(localStorage.getItem(OLDKEY));if(old&&old.nodes&&old.nodes.length){
+          const g=DB.maps.find(m=>m.name==='Grécia Antiga');g.nodes=old.nodes;g.nodes.find(n=>n.parent===null).text='Grécia Antiga'}}catch(e){}
+      }
+      persistLocal();
+    }
+  }
+  setStatus();route();
+}
+
+// busca alterações feitas por outras pessoas (a cada 4 s)
+let polling=false;
+async function poll(){
+  if(polling||document.hidden)return;polling=true;
+  try{
+    const j=await api('GET','?rev='+REV);
+    if(j.mudou){
+      REV=j.rev;const remote=j.maps||[];const ids=new Set(remote.map(m=>m.id));
+      const busy=id=>pending.has(id)||(CUR&&CUR.id===id&&(drag||editing||document.activeElement===$('note')));
+      remote.forEach(rm=>{
+        const lm=DB.maps.find(m=>m.id===rm.id);
+        if(!lm)DB.maps.push(rm);
+        else if(!busy(rm.id)&&rm.updated>lm.updated){lm.name=rm.name;lm.nodes=rm.nodes;lm.updated=rm.updated;
+          if(CUR&&CUR.id===lm.id){S.nodes=lm.nodes;if(S.sel&&!byId(S.sel))S.sel=null;render(false);refreshPanel()}}
+      });
+      const gone=DB.maps.filter(m=>!ids.has(m.id)&&!pending.has(m.id));
+      if(gone.length){DB.maps=DB.maps.filter(m=>!gone.includes(m));if(CUR&&gone.includes(CUR)){toast('Este mapa foi apagado por outra pessoa');location.hash=''}}
+      persistLocal();if(!CUR)showHome();
+    }
+    if(lastErr==='Sem conexão — tentando de novo'&&!pending.size){lastErr='';setStatus()}
+  }catch(e){}
+  polling=false;
+}
+
 window.addEventListener('hashchange',route);
 function route(){
+  closePops();
   const id=(location.hash.match(/^#\/mapa\/(.+)$/)||[])[1];
   const m=id&&DB.maps.find(x=>x.id===id);
   if(m)openMap(m);else showHome();
 }
 
-// ---------- tela inicial ----------
-function cardColor(m){const r=m.nodes.find(n=>n.parent===null);const firstKid=m.nodes.find(n=>r&&n.parent===r.id&&n.color);return (firstKid&&firstKid.color)||'#c8862f'}
+// ================= tela inicial =================
+function cardColor(m){const r=m.nodes.find(n=>n.parent===null);const k=m.nodes.find(n=>r&&n.parent===r.id&&n.color);return (k&&k.color)||'#c8862f'}
 function showHome(){
   CUR=null;$('editor').classList.add('hidden');$('home').classList.remove('hidden');
   document.title='Mapas Mentais';
   const g=$('grid');g.innerHTML='';
+  if(!DB.maps.length)g.innerHTML='<div class="empty">Nenhum mapa ainda.'+(CAN_EDIT?' Crie o primeiro acima.':'')+'</div>';
   [...DB.maps].sort((a,b)=>b.updated-a.updated).forEach(m=>{
     const c=document.createElement('div');c.className='card';c.style.setProperty('--c',cardColor(m));
     const n=m.nodes.length-1;
     c.innerHTML=`<h3></h3><div class="meta">${n} tópico${n===1?'':'s'} · ${new Date(m.updated).toLocaleDateString('pt-BR')}</div>
-      <div class="acts"><button data-a="ren">Renomear</button><button data-a="dup">Duplicar</button><button data-a="del">Apagar</button></div>`;
+      <div class="acts ed"><button data-a="ren">Renomear</button><button data-a="dup">Duplicar</button><button data-a="del">Apagar</button></div>`;
     c.querySelector('h3').textContent=m.name;
     c.onclick=e=>{
       const a=e.target.dataset&&e.target.dataset.a;
-      if(a==='ren'){e.stopPropagation();const nn=prompt('Novo nome do mapa:',m.name);if(nn&&nn.trim()){setMapName(m,nn.trim());persist();showHome()}}
-      else if(a==='dup'){e.stopPropagation();const c2=JSON.parse(JSON.stringify(m));c2.id=uid();setMapName(c2,m.name+' (cópia)');c2.updated=Date.now();DB.maps.push(c2);persist();showHome()}
-      else if(a==='del'){e.stopPropagation();if(confirm(`Apagar o mapa "${m.name}"? Isso não pode ser desfeito.`)){DB.maps=DB.maps.filter(x=>x!==m);persist();showHome()}}
+      if(a==='ren'){e.stopPropagation();const nn=prompt('Novo nome do mapa:',m.name);if(nn&&nn.trim()){setMapName(m,nn.trim());m.updated=Date.now();queueSave(m);showHome()}}
+      else if(a==='dup'){e.stopPropagation();const c2=JSON.parse(JSON.stringify(plain(m)));c2.id=uid();setMapName(c2,m.name+' (cópia)');c2.updated=Date.now();DB.maps.push(c2);queueSave(c2);showHome()}
+      else if(a==='del'){e.stopPropagation();if(confirm(`Apagar o mapa "${m.name}"? Isso não pode ser desfeito.`)){DB.maps=DB.maps.filter(x=>x!==m);clearTimeout(pending.get(m.id));pending.delete(m.id);persistLocal();removeMapCloud(m.id);showHome()}}
       else location.hash='#/mapa/'+m.id;
     };
     g.appendChild(c);
@@ -192,37 +366,38 @@ function showHome(){
 function setMapName(m,name){m.name=name;const r=m.nodes.find(n=>n.parent===null);if(r)r.text=name}
 function createFromInput(){
   const name=$('newName').value.trim();if(!name){$('newName').focus();return toast('Digite um nome para o mapa')}
-  const m=newMap(name);DB.maps.push(m);persist();$('newName').value='';location.hash='#/mapa/'+m.id;
+  const m=newMap(name);DB.maps.push(m);queueSave(m);$('newName').value='';location.hash='#/mapa/'+m.id;
 }
 $('bNew').onclick=createFromInput;
 $('newName').addEventListener('keydown',e=>{if(e.key==='Enter')createFromInput()});
 $('bExportAll').onclick=()=>{
-  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify({versao:2,salvoEm:new Date().toISOString(),maps:DB.maps},null,1)],{type:'application/json'}));
-  a.download='mapas.json';a.click();toast('Salve na pasta do projeto e rode publicar.bat');
+  download(new Blob([JSON.stringify({versao:2,salvoEm:new Date().toISOString(),maps:DB.maps.map(plain)},null,1)],{type:'application/json'}),CLOUD?'backup-mapas.json':'mapas.json');
+  if(!CLOUD)toast('Para publicar: salve na pasta do projeto e rode publicar.bat');
 };
 $('bImportAll').onclick=()=>$('file').click();
 $('file').onchange=async e=>{const f=e.target.files[0];if(!f)return;
   try{const d=JSON.parse(await f.text());let add=[];
-    if(d.maps)add=d.maps;else if(d.nodes){const r=d.nodes.find(n=>n.parent===null);add=[{name:(r?r.text:'Mapa').split('\n')[0],nodes:d.nodes,view:null}]}
+    if(d.maps)add=d.maps;else if(d.nodes){const r=d.nodes.find(n=>n.parent===null);add=[{name:(r?r.text:'Mapa').split('\n')[0],nodes:d.nodes}]}
     if(!add.length)throw 0;
-    if(d.maps&&confirm('Substituir todos os mapas deste navegador pelos do arquivo?\n(Cancelar = adicionar aos atuais)'))DB.maps=[];
-    add.forEach(m=>{m.id=uid();m.updated=m.updated||Date.now();DB.maps.push(m)});
-    persist();showHome();toast('Mapas carregados');
+    add.forEach(m=>{const nm={id:uid(),name:m.name,nodes:m.nodes,updated:Date.now()};DB.maps.push(nm);queueSave(nm)});
+    showHome();toast(add.length+' mapa(s) adicionado(s)');
   }catch(err){alert('Arquivo inválido')}e.target.value=''};
+function download(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),5000)}
 
-// ---------- editor ----------
-let CUR=null, S={nodes:[],sel:null,view:{x:0,y:0,k:1}};
+// ================= editor =================
+let CUR=null, S={nodes:[],sel:null,view:{x:0,y:0,k:1}}, editing=false;
 const world=$('world'),svg=$('links'),stage=$('stage');
 function openMap(m){
   CUR=m;S.nodes=m.nodes;S.sel=null;
-  $('home').classList.add('hidden');$('editor').classList.remove('hidden');
+  $('home').classList.add('hidden');$('editor').classList.remove('hidden');$('panel').classList.add('hidden');
   $('mapTitle').textContent=m.name;document.title=m.name+' · Mapas Mentais';
-  if(m.view)S.view=m.view;else{S.view={x:0,y:0,k:1};center()}
+  if(VIEWS[m.id])S.view=VIEWS[m.id];else{S.view={x:0,y:0,k:1};center()}
   render(false);
 }
-function save(){if(!CUR)return;CUR.nodes=S.nodes;CUR.view=S.view;CUR.updated=Date.now();
+function save(){if(!CUR||!CAN_EDIT)return;CUR.nodes=S.nodes;CUR.updated=Date.now();
   const r=S.nodes.find(n=>n.parent===null);if(r){CUR.name=r.text.split('\n')[0];$('mapTitle').textContent=CUR.name}
-  persist()}
+  queueSave(CUR)}
+function saveView(){if(CUR){VIEWS[CUR.id]=S.view;saveViews()}}
 
 const byId=id=>S.nodes.find(n=>n.id===id);
 const kidsOf=(nodes,id)=>nodes.filter(n=>n.parent===id);
@@ -236,7 +411,7 @@ const nextId=()=>Math.max(0,...S.nodes.map(n=>n.id))+1;
 
 function layoutNodes(nodes){
   const r=nodes.find(n=>n.parent===null);if(!r)return;r.x=0;r.y=0;
-  const GAPY=58,GAPX=[0,320,270,260];
+  const GAPY=60,GAPX=[0,330,280,270];
   const k=id=>kidsOf(nodes,id);
   function size(n){const c=n.folded?[]:k(n.id);return c.length?c.reduce((s,x)=>s+size(x),0):1}
   const right=[],left=[];let sr=0,sl=0;
@@ -257,33 +432,39 @@ function render(doSave=true){
       paths+=`<path d="M${p.x},${p.y} C${mx},${p.y} ${mx},${n.y} ${n.x},${n.y}" stroke="${colorOf(n)}" stroke-width="${w}" fill="none" opacity=".75"/>`}
     const el=document.createElement('div');const d=depth(n);
     el.className='node'+(d===0?' root':d===1?' lvl1':'')+(n.id===S.sel?' sel':'')+(n.done?' done':'');
-    el.style.left=n.x+'px';el.style.top=n.y+'px';el.style.setProperty('--c',colorOf(n));
-    el.textContent=n.text;el.dataset.id=n.id;
+    el.style.left=n.x+'px';el.style.top=n.y+'px';el.style.setProperty('--c',colorOf(n));el.dataset.id=n.id;
+    if(n.icon){const i=document.createElement('span');i.className='ic';i.textContent=n.icon;el.appendChild(i)}
+    const t=document.createElement('span');t.className='t';t.textContent=n.text;el.appendChild(t);
+    const na=(n.atts||[]).length;
+    if(n.note||na){const b=document.createElement('div');b.className='badges';
+      b.innerHTML=(n.note?'<span data-p="1" title="Tem notas">📝</span>':'')+(na?`<span data-p="1" title="Anexos">📎 ${na}</span>`:'');el.appendChild(b)}
     if(n.folded&&kids(n.id).length){const f=document.createElement('span');f.className='fold';f.textContent=subtree(n.id).length-1;el.appendChild(f)}
     world.appendChild(el);
   });
   svg.innerHTML=paths;applyView();if(doSave)save();
 }
 
-function select(id){S.sel=id;render()}
+function select(id){S.sel=id;render(false);refreshPanel()}
 function addChild(){
+  if(!CAN_EDIT)return;
   const p=byId(S.sel)||root();p.folded=false;
   const ks=kids(p.id);const side=p.parent===null?(ks.length%2?-1:1):(p.x>=0?1:-1);const last=ks[ks.length-1];
-  const n={id:nextId(),text:'Nova ideia',parent:p.id,color:null,done:false,folded:false,x:p.x+side*240,y:last?last.y+58:p.y};
+  const n={id:nextId(),text:'Nova ideia',parent:p.id,color:null,done:false,folded:false,x:p.x+side*250,y:last?last.y+60:p.y};
   if(p.parent===null)n.color=PALETTE[ks.length%PALETTE.length];
-  S.nodes.push(n);S.sel=n.id;render();rename(n.id,true);
+  S.nodes.push(n);S.sel=n.id;render();rename(n.id,true);refreshPanel();
 }
 function addSibling(){const n=byId(S.sel);if(!n||n.parent===null)return addChild();S.sel=n.parent;addChild()}
-function del(){const n=byId(S.sel);if(!n)return;if(n.parent===null)return toast('O tópico central não pode ser apagado');
+function del(){if(!CAN_EDIT)return;const n=byId(S.sel);if(!n)return;if(n.parent===null)return toast('O tópico central não pode ser apagado');
   const ids=subtree(n.id);if(ids.length>3&&!confirm(`Apagar "${n.text}" e mais ${ids.length-1} tópicos?`))return;
-  S.nodes=S.nodes.filter(x=>!ids.includes(x.id));S.sel=n.parent;render()}
+  S.nodes=S.nodes.filter(x=>!ids.includes(x.id));CUR.nodes=S.nodes;S.sel=n.parent;render();refreshPanel()}
 function rename(id,selectAll=true){
-  const el=world.querySelector(`.node[data-id="${id}"]`);if(!el)return toast('Selecione um tópico primeiro');
-  el.querySelector('.fold')?.remove();el.contentEditable=true;el.focus();
+  if(!CAN_EDIT)return;
+  const el=world.querySelector(`.node[data-id="${id}"] .t`);if(!el)return toast('Selecione um tópico primeiro');
+  editing=true;el.contentEditable=true;el.focus();
   const r=document.createRange();r.selectNodeContents(el);if(!selectAll)r.collapse(false);
   const s=getSelection();s.removeAllRanges();s.addRange(r);
   let done=false;
-  const finish=()=>{if(done)return;done=true;el.contentEditable=false;const n=byId(id);if(n)n.text=el.innerText.trim()||'…';render()};
+  const finish=()=>{if(done)return;done=true;editing=false;el.contentEditable=false;const n=byId(id);if(n)n.text=el.innerText.trim()||'…';render();refreshPanel()};
   el.addEventListener('blur',finish,{once:true});
   el.addEventListener('keydown',e=>{
     if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();el.blur()}
@@ -292,15 +473,19 @@ function rename(id,selectAll=true){
     e.stopPropagation();
   });
 }
-let tt;function toast(t){const e=$('toast');e.textContent=t;e.classList.add('show');clearTimeout(tt);tt=setTimeout(()=>e.classList.remove('show'),2200)}
+let tt;function toast(t){const e=$('toast');e.textContent=t;e.classList.add('show');clearTimeout(tt);tt=setTimeout(()=>e.classList.remove('show'),2600)}
 
+// ---------- mouse / toque ----------
 let drag=null;
 stage.addEventListener('pointerdown',e=>{
-  const el=e.target.closest('.node');if(el&&el.isContentEditable)return;
+  closePops();
+  if(e.target.closest('[contenteditable=true]'))return;
+  const el=e.target.closest('.node');
   if(el){const id=+el.dataset.id;if(S.sel!==id)select(id);
-    drag={type:'node',sx:e.clientX,sy:e.clientY,orig:subtree(id).map(i=>{const n=byId(i);return[n,n.x,n.y]}),moved:false}}
+    if(e.target.dataset.p){openPanel();return}
+    drag=CAN_EDIT?{type:'node',sx:e.clientX,sy:e.clientY,orig:subtree(id).map(i=>{const n=byId(i);return[n,n.x,n.y]}),moved:false}:null}
   else{drag={type:'pan',sx:e.clientX,sy:e.clientY,vx:S.view.x,vy:S.view.y,moved:false};stage.classList.add('panning')}
-  stage.setPointerCapture(e.pointerId);
+  if(drag)stage.setPointerCapture(e.pointerId);
 });
 stage.addEventListener('pointermove',e=>{
   if(!drag)return;const dx=e.clientX-drag.sx,dy=e.clientY-drag.sy;if(Math.abs(dx)+Math.abs(dy)>3)drag.moved=true;
@@ -308,18 +493,21 @@ stage.addEventListener('pointermove',e=>{
   else if(drag.moved){drag.orig.forEach(([n,x,y])=>{n.x=x+dx/S.view.k;n.y=y+dy/S.view.k});render(false)}
 });
 stage.addEventListener('pointerup',()=>{
-  if(drag&&drag.type==='pan'&&!drag.moved&&S.sel!==null){S.sel=null;render()}else if(drag)save();
+  if(drag&&drag.type==='pan'){if(!drag.moved&&S.sel!==null){S.sel=null;render(false);refreshPanel()}saveView()}
+  else if(drag&&drag.moved)save();
   drag=null;stage.classList.remove('panning');
 });
-stage.addEventListener('dblclick',e=>{const el=e.target.closest('.node');if(el)rename(+el.dataset.id,false)});
+stage.addEventListener('dblclick',e=>{const el=e.target.closest('.node');if(el&&!e.target.dataset.p)rename(+el.dataset.id,false)});
 stage.addEventListener('wheel',e=>{
   e.preventDefault();const r=stage.getBoundingClientRect();const mx=e.clientX-r.left,my=e.clientY-r.top;
-  const k=Math.min(2.5,Math.max(.25,S.view.k*(e.deltaY<0?1.1:1/1.1)));
-  S.view.x=mx-(mx-S.view.x)*k/S.view.k;S.view.y=my-(my-S.view.y)*k/S.view.k;S.view.k=k;applyView();save();
+  const k=Math.min(2.5,Math.max(.2,S.view.k*(e.deltaY<0?1.1:1/1.1)));
+  S.view.x=mx-(mx-S.view.x)*k/S.view.k;S.view.y=my-(my-S.view.y)*k/S.view.k;S.view.k=k;applyView();saveView();
 },{passive:false});
 
 document.addEventListener('keydown',e=>{
-  if(!CUR)return;const a=document.activeElement;if(a&&(a.isContentEditable||a.tagName==='INPUT'))return;
+  if(!CUR)return;const a=document.activeElement;if(a&&(a.isContentEditable||a.tagName==='INPUT'||a.tagName==='TEXTAREA'))return;
+  if(e.key==='Escape'){closePops();$('panel').classList.add('hidden');return}
+  if(!CAN_EDIT)return;
   const n=byId(S.sel);
   if(e.key==='Tab'){e.preventDefault();addChild()}
   else if(e.key==='Enter'){e.preventDefault();addSibling()}
@@ -329,17 +517,93 @@ document.addEventListener('keydown',e=>{
   else if((e.key==='f'||e.key==='F')&&n){n.folded=!n.folded;render()}
 });
 
+// ---------- barra ----------
 $('bBack').onclick=()=>{location.hash=''};
 $('bAdd').onclick=addChild;$('bSib').onclick=addSibling;$('bDel').onclick=del;
 $('bRename').onclick=()=>S.sel?rename(S.sel):toast('Clique num tópico e depois em Renomear');
-$('bDone').onclick=()=>{const n=byId(S.sel);if(n){n.done=!n.done;render()}};
+$('bDone').onclick=()=>{const n=byId(S.sel);if(n){n.done=!n.done;render()}else toast('Selecione um tópico')};
 $('bLayout').onclick=()=>{layoutNodes(S.nodes);render()};
-$('bCenter').onclick=()=>{center();applyView();save()};
+$('bCenter').onclick=()=>{center();applyView();saveView()};
 $('bHelp').onclick=()=>$('help').classList.toggle('hidden');
 $('bHideHelp').onclick=()=>$('help').classList.add('hidden');
 PALETTE.forEach(c=>{const s=document.createElement('span');s.style.background=c;s.title='Cor do ramo';
   s.onclick=()=>{const n=byId(S.sel);if(n){n.color=c;render()}else toast('Selecione um tópico')};$('colors').appendChild(s)});
 window.addEventListener('resize',applyView);
+
+// ---------- menus suspensos ----------
+function closePops(){document.querySelectorAll('.pop').forEach(p=>p.classList.add('hidden'))}
+function openPop(pop,btn){const was=!pop.classList.contains('hidden');closePops();if(was)return;
+  const r=btn.getBoundingClientRect();pop.classList.remove('hidden');
+  pop.style.left=Math.min(r.left,innerWidth-pop.offsetWidth-10)+'px'}
+ICONS.forEach(ic=>{const s=document.createElement('span');s.textContent=ic;s.onclick=()=>{const n=byId(S.sel);if(n){n.icon=ic;render();refreshPanel()}closePops()};$('iconPop').appendChild(s)});
+{const b=document.createElement('button');b.textContent='Remover ícone';b.onclick=()=>{const n=byId(S.sel);if(n){delete n.icon;render();refreshPanel()}closePops()};$('iconPop').appendChild(b)}
+$('bIcon').onclick=e=>{if(!S.sel)return toast('Selecione um tópico');e.stopPropagation();openPop($('iconPop'),$('bIcon'))};
+$('bExport').onclick=e=>{e.stopPropagation();openPop($('exportPop'),$('bExport'))};
+document.addEventListener('click',e=>{if(!e.target.closest('.pop')&&!e.target.closest('#bIcon,#bExport'))closePops()});
+
+// ---------- painel de notas e anexos ----------
+function openPanel(){if(!S.sel)return toast('Selecione um tópico');$('panel').classList.remove('hidden');refreshPanel()}
+$('bDetails').onclick=()=>$('panel').classList.contains('hidden')?openPanel():$('panel').classList.add('hidden');
+$('bClosePanel').onclick=()=>$('panel').classList.add('hidden');
+function refreshPanel(){
+  if($('panel').classList.contains('hidden'))return;
+  const n=byId(S.sel);
+  if(!n){$('pTitle').textContent='Nenhum tópico selecionado';$('note').value='';$('noteView').textContent='';$('atts').innerHTML='';return}
+  $('pTitle').textContent=(n.icon?n.icon+' ':'')+n.text;
+  if(document.activeElement!==$('note'))$('note').value=n.note||'';
+  $('noteView').textContent=n.note||'(sem notas)';$('noteView').classList.toggle('hidden',CAN_EDIT);
+  const list=$('atts');list.innerHTML='';
+  (n.atts||[]).forEach((a,i)=>{const d=document.createElement('div');d.className='att';
+    d.innerHTML=`<span>${a.tipo==='arquivo'?'📁':'🔗'}</span><a href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.nome||a.url)}</a>`+(CAN_EDIT?'<button title="Remover">✕</button>':'');
+    const b=d.querySelector('button');if(b)b.onclick=()=>{n.atts.splice(i,1);render();refreshPanel()};list.appendChild(d)});
+  if(!(n.atts||[]).length)list.innerHTML='<div class="hint">Nenhum anexo.</div>';
+  const canFile=CLOUD&&CLOUD.anexos&&CAN_EDIT;
+  $('bAddFile').disabled=!canFile;
+  $('attHint').textContent=!CAN_EDIT?'':!CLOUD?'Envio de arquivos funciona no site publicado com a nuvem ligada. Links funcionam sempre.':!CLOUD.anexos?'Para enviar arquivos, ligue o armazenamento Blob na Vercel.':'Arquivos de até 4 MB.';
+}
+let noteT;
+$('note').addEventListener('input',()=>{const n=byId(S.sel);if(!n)return;n.note=$('note').value;clearTimeout(noteT);noteT=setTimeout(()=>render(),600)});
+$('bAddLink').onclick=()=>{const n=byId(S.sel);if(!n)return;
+  let url=prompt('Cole o link (endereço):');if(!url)return;url=url.trim();if(!/^https?:\/\//i.test(url))url='https://'+url;
+  const nome=prompt('Nome do link (opcional):',url.replace(/^https?:\/\/(www\.)?/,'').slice(0,60))||url;
+  (n.atts=n.atts||[]).push({tipo:'link',nome,url});render();refreshPanel()};
+$('bAddFile').onclick=()=>$('attFile').click();
+$('attFile').onchange=async e=>{
+  const f=e.target.files[0];e.target.value='';const n=byId(S.sel);if(!f||!n)return;
+  if(f.size>4*1024*1024)return toast('Arquivo maior que 4 MB');
+  toast('Enviando '+f.name+'…');
+  try{const r=await fetch('/api/anexo',{method:'POST',headers:{'x-senha':SENHA,'x-nome':encodeURIComponent(f.name),'Content-Type':f.type||'application/octet-stream'},body:f});
+    const j=await r.json();if(!r.ok)throw new Error(j.erro||r.status);
+    (n.atts=n.atts||[]).push({tipo:'arquivo',nome:f.name,url:j.url});render();refreshPanel();toast('Arquivo anexado')}
+  catch(err){toast('Falhou: '+err.message)}
+};
+
+// ---------- exportar imagem / PDF ----------
+function loadScript(src){return new Promise((ok,fail)=>{const s=document.createElement('script');s.src=src;s.onload=ok;s.onerror=()=>fail(new Error('Sem internet para carregar o exportador'));document.head.appendChild(s)})}
+async function snapshot(jpeg){
+  if(!window.htmlToImage)await loadScript('https://cdn.jsdelivr.net/npm/html-to-image@1.11.13/dist/html-to-image.js');
+  const prevSel=S.sel;S.sel=null;render(false);
+  const els=[...world.querySelectorAll('.node')];
+  let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
+  els.forEach(el=>{const w=el.offsetWidth,h=el.offsetHeight,x=parseFloat(el.style.left),y=parseFloat(el.style.top);
+    x0=Math.min(x0,x-w/2);x1=Math.max(x1,x+w/2);y0=Math.min(y0,y-h/2);y1=Math.max(y1,y+h/2)});
+  const pad=50,W=Math.ceil(x1-x0+pad*2),H=Math.ceil(y1-y0+pad*2);
+  try{
+    const fn=jpeg?htmlToImage.toJpeg:htmlToImage.toPng;
+    return {W,H,url:await fn(world,{quality:.9,width:W,height:H,pixelRatio:2,backgroundColor:'#1d0f0a',
+      style:{transform:`translate(${pad-x0}px,${pad-y0}px)`,transformOrigin:'0 0'}})};
+  }finally{S.sel=prevSel;render(false)}
+}
+const fname=()=>(CUR?CUR.name:'mapa').replace(/[\\/:*?"<>|]+/g,'_');
+$('bPng').onclick=async()=>{closePops();toast('Gerando imagem…');
+  try{const {url}=await snapshot();const a=document.createElement('a');a.href=url;a.download=fname()+'.png';a.click()}catch(e){toast(e.message)}};
+$('bPdf').onclick=async()=>{closePops();toast('Gerando PDF…');
+  try{
+    if(!window.jspdf)await loadScript('https://cdn.jsdelivr.net/npm/jspdf@4.2.1/dist/jspdf.umd.min.js');
+    const {W,H,url}=await snapshot(true);
+    const pdf=new jspdf.jsPDF({orientation:W>=H?'landscape':'portrait',unit:'px',format:[W,H],hotfixes:['px_scaling']});
+    pdf.addImage(url,'JPEG',0,0,W,H);pdf.save(fname()+'.pdf');
+  }catch(e){toast(e.message)}};
 
 boot();
 </script>
