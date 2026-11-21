@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mapa Mental de Ideias | Grécia Antiga</title>
+<style>
+  :root{--bg:#1d0f0a;--panel:#2b1710;--ink:#f3e9df;--muted:#b9a596;--accent:#c8862f;--line:#7a4a33}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  body{background-image:radial-gradient(circle at 1px 1px,#3a2218 1px,transparent 0);background-size:28px 28px}
+  #bar{position:fixed;top:0;left:0;right:0;height:52px;display:flex;align-items:center;gap:8px;padding:0 14px;background:var(--panel);border-bottom:1px solid #4a2b1f;z-index:10;flex-wrap:nowrap;overflow-x:auto}
+  #bar h1{font-size:16px;font-weight:600;margin-right:10px;white-space:nowrap}
+  #bar h1 a{color:var(--muted);font-weight:400;font-size:13px;margin-left:8px;text-decoration:none}
+  button{background:#3b2117;color:var(--ink);border:1px solid #5a3424;border-radius:8px;padding:7px 11px;font-size:13px;cursor:pointer;white-space:nowrap}
+  button:hover{background:#4a2a1d}
+  button.pri{background:var(--accent);border-color:var(--accent);color:#1d0f0a;font-weight:600}
+  #colors{display:flex;gap:4px;margin-left:4px}
+  #colors span{width:20px;height:20px;border-radius:50%;cursor:pointer;border:2px solid transparent}
+  #colors span:hover{border-color:#fff}
+  #stage{position:absolute;inset:52px 0 0 0;cursor:grab;touch-action:none}
+  #stage.panning{cursor:grabbing}
+  #world{position:absolute;left:0;top:0;transform-origin:0 0}
+  svg#links{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
+  .node{position:absolute;transform:translate(-50%,-50%);padding:9px 14px;border-radius:12px;background:#2f1a12;border:2px solid var(--c,#7a4a33);color:var(--ink);font-size:14px;line-height:1.3;width:max-content;max-width:240px;min-width:40px;text-align:center;cursor:move;user-select:none;box-shadow:0 4px 14px rgba(0,0,0,.35);white-space:pre-wrap;word-break:break-word}
+  .node.root{font-size:18px;font-weight:700;padding:14px 20px;background:var(--c,#652716);border-color:#f3e9df55}
+  .node.lvl1{font-weight:600;background:color-mix(in srgb,var(--c) 30%,#2f1a12)}
+  .node.sel{outline:3px solid #fff;outline-offset:2px}
+  .node.done{opacity:.55;text-decoration:line-through}
+  .node[contenteditable=true]{cursor:text;user-select:text;outline:3px solid var(--accent)}
+  .node .fold{position:absolute;right:-10px;top:50%;transform:translateY(-50%);width:18px;height:18px;border-radius:50%;background:var(--c);color:#1d0f0a;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}
+  #help{position:fixed;right:14px;bottom:14px;background:var(--panel);border:1px solid #4a2b1f;border-radius:10px;padding:12px 14px;font-size:12.5px;color:var(--muted);line-height:1.7;max-width:290px;z-index:10}
+  #help b{color:var(--ink)}
+  #help.hide{display:none}
+  #toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--accent);color:#1d0f0a;padding:8px 16px;border-radius:8px;font-weight:600;font-size:13px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:20}
+  #toast.show{opacity:1}
+  input[type=file]{display:none}
+</style>
+</head>
+<body>
+<div id="bar">
+  <h1>🏛️ Mapa de Ideias <a href="../">← ver o site</a></h1>
+  <button class="pri" id="bAdd" title="Tab">+ Filho</button>
+  <button id="bSib" title="Enter">+ Irmão</button>
+  <button id="bEdit" title="F2 ou duplo clique">Editar</button>
+  <button id="bDone" title="Espaço">✓ Feito</button>
+  <button id="bDel" title="Delete">Apagar</button>
+  <div id="colors"></div>
+  <span style="flex:1"></span>
+  <button id="bLayout">Organizar</button>
+  <button id="bCenter">Centralizar</button>
+  <button id="bExport" title="Salve como ideias/mapa.json e rode publicar.bat">Baixar mapa.json</button>
+  <button id="bImport">Abrir .json</button>
+  <button id="bReset">Restaurar original</button>
+  <button id="bHelp">?</button>
+  <input type="file" id="file" accept=".json,application/json">
+</div>
+<div id="stage"><div id="world"><svg id="links"></svg></div></div>
+<div id="help">
+  <b>Clique</b> num tópico para selecionar · <b>duplo clique</b> para editar<br>
+  <b>Tab</b> novo filho · <b>Enter</b> novo irmão · <b>Delete</b> apagar<br>
+  <b>Espaço</b> marcar como feito · <b>F</b> recolher/expandir ramo<br>
+  <b>Arraste</b> tópicos para mover (o ramo vai junto)<br>
+  <b>Arraste o fundo</b> para navegar · <b>roda do mouse</b> para zoom<br>
+  Tudo é salvo neste navegador automaticamente.<br>
+  Para o site publicado mostrar suas mudanças: <b>Baixar mapa.json</b> → salvar na pasta <b>ideias</b> → rodar <b>publicar.bat</b>.
+  <div style="text-align:right;margin-top:6px"><button id="bHideHelp">Ok</button></div>
+</div>
+<div id="toast"></div>
+
+<script>
+const KEY='mapa-ideias-grecia-v1';
+const PALETTE=['#c8862f','#d9534f','#5b9bd5','#6aa84f','#a678c9','#e0b84a','#4fb3a9','#cf6f9a'];
+
+function seed(){
+  const T=(text,children=[],extra={})=>({text,children,...extra});
+  return T('Grécia Antiga\nMapa Mental (projeto)',[
+    T('Conteúdo atual',[
+      T('Cidades',[T('Atenas — origem, história, legado'),T('Esparta? (ainda falta)'),T('Corinto? (ainda falta)')]),
+      T('Geografia',[T('Península Balcânica + ilhas do Egeu'),T('Relevo montanhoso → cidades-estado'),T('Clima mediterrâneo')]),
+      T('Figuras',[T('Sócrates'),T('Platão'),T('Aristóteles'),T('Péricles'),T('Alexandre, o Grande')]),
+      T('Cultura',[T('Teatro: Ésquilo, Aristófanes'),T('Mitologia'),T('Jogos Olímpicos'),T('Arquitetura')]),
+      T('Guerras',[T('Guerra de Troia'),T('Guerras Médicas'),T('Guerra do Peloponeso'),T('Conquistas de Alexandre')]),
+      T('Deuses',[T('Zeus, Hera, Poseidon'),T('Atena, Apolo, Ártemis'),T('Afrodite, Hades')])
+    ],{color:'#c8862f'}),
+    T('Ideias de conteúdo',[
+      T('Pontos clicáveis no mapa (cada cidade abre o modal)'),
+      T('Linha do tempo (Período Homérico → Helenístico)'),
+      T('Quiz no final'),
+      T('Imagens nos modais'),
+      T('Fontes / referências')
+    ],{color:'#6aa84f'}),
+    T('Melhorias técnicas',[
+      T('Site responsivo (hoje tudo fixo em 1200px)'),
+      T('main.js: um loop só para os 6 modais'),
+      T('Fechar modal com Esc / clique fora'),
+      T('Corrigir meta "descripton" → "description"'),
+      T('Texto alternativo (alt) nas imagens')
+    ],{color:'#5b9bd5'}),
+    T('Publicação',[
+      T('Vercel — rodar publicar.bat'),
+      T('Mapa de ideias em /ideias'),
+      T('Domínio personalizado?')
+    ],{color:'#a678c9'}),
+    T('Equipe / prazos',[T('Otavio'),T('Everton'),T('Data de entrega: ?')],{color:'#e0b84a'})
+  ],{color:'#652716'});
+}
+
+// ---- modelo: lista plana {id,text,parent,x,y,color,done,folded}
+let S={nodes:[],sel:null,view:{x:0,y:0,k:1}};
+let nid=1;
+function fromTree(t){
+  const nodes=[];
+  (function walk(n,parent){const id=nid++;nodes.push({id,text:n.text,parent,color:n.color||null,done:false,folded:false,x:0,y:0});(n.children||[]).forEach(c=>walk(c,id));})(t,null);
+  return nodes;
+}
+const byId=id=>S.nodes.find(n=>n.id===id);
+const kids=id=>S.nodes.filter(n=>n.parent===id);
+const root=()=>S.nodes.find(n=>n.parent===null);
+function depth(n){let d=0;while(n.parent!==null){n=byId(n.parent);d++}return d}
+function colorOf(n){while(n){if(n.color)return n.color;n=n.parent!==null?byId(n.parent):null}return '#7a4a33'}
+function hidden(n){let p=n.parent!==null?byId(n.parent):null;while(p){if(p.folded)return true;p=p.parent!==null?byId(p.parent):null}return false}
+function subtree(id){const out=[id];kids(id).forEach(k=>out.push(...subtree(k.id)));return out}
+
+// ---- layout: raiz no centro, ramos divididos esquerda/direita
+function layout(){
+  const r=root();r.x=0;r.y=0;
+  const top=kids(r.id);
+  const GAPY=50, GAPX=[0,320,270,260];
+  function size(n){const k=n.folded?[]:kids(n.id);return k.length?k.reduce((s,c)=>s+size(c),0):1}
+  const right=[],left=[];let sr=0,sl=0;
+  top.forEach(n=>{const z=size(n);if(sr<=sl){right.push(n);sr+=z}else{left.push(n);sl+=z}});
+  function place(n,dir,x,yTop,d){
+    const h=size(n)*GAPY;n.x=x;n.y=yTop+h/2;
+    if(n.folded)return;let y=yTop;
+    kids(n.id).forEach(c=>{place(c,dir,x+dir*(GAPX[Math.min(d+1,3)]),y,d+1);y+=size(c)*GAPY});
+  }
+  [[right,1],[left,-1]].forEach(([side,dir])=>{
+    const total=side.reduce((s,n)=>s+size(n)*GAPY+30,0);let y=-total/2;
+    side.forEach(n=>{place(n,dir,dir*GAPX[1],y,1);y+=size(n)*GAPY+30});
+  });
+}
+
+// ---- persistência
+function save(){try{localStorage.setItem(KEY,JSON.stringify({nodes:S.nodes,view:S.view}))}catch(e){}}
+function exportData(){return {versao:1,salvoEm:new Date().toISOString(),nodes:S.nodes}}
+function load(data){S.nodes=data.nodes;nid=Math.max(...S.nodes.map(n=>n.id))+1;if(data.view)S.view=data.view;S.sel=null}
+async function init(){
+  let local=null;try{local=JSON.parse(localStorage.getItem(KEY))}catch(e){}
+  if(local&&local.nodes&&local.nodes.length){load(local)}
+  else{
+    try{const r=await fetch('mapa.json',{cache:'no-store'});if(r.ok){load(await r.json())}}catch(e){}
+    if(!S.nodes.length){S.nodes=fromTree(seed());layout()}
+    center();
+  }
+  render();
+}
+
+// ---- renderização
+const world=document.getElementById('world'),svg=document.getElementById('links'),stage=document.getElementById('stage');
+function applyView(){world.style.transform=`translate(${S.view.x}px,${S.view.y}px) scale(${S.view.k})`}
+function render(){
+  world.querySelectorAll('.node').forEach(e=>e.remove());
+  let paths='';
+  S.nodes.forEach(n=>{
+    if(hidden(n))return;
+    if(n.parent!==null){const p=byId(n.parent);const mx=(p.x+n.x)/2;
+      const w=Math.max(1.5,5-depth(n));
+      paths+=`<path d="M${p.x},${p.y} C${mx},${p.y} ${mx},${n.y} ${n.x},${n.y}" stroke="${colorOf(n)}" stroke-width="${w}" fill="none" opacity=".75"/>`;}
+    const el=document.createElement('div');const d=depth(n);
+    el.className='node'+(d===0?' root':d===1?' lvl1':'')+(n.id===S.sel?' sel':'')+(n.done?' done':'');
+    el.style.left=n.x+'px';el.style.top=n.y+'px';el.style.setProperty('--c',colorOf(n));
+    el.textContent=n.text;el.dataset.id=n.id;
+    if(n.folded&&kids(n.id).length){const f=document.createElement('span');f.className='fold';f.textContent=subtree(n.id).length-1;el.appendChild(f)}
+    world.appendChild(el);
+  });
+  svg.innerHTML=paths;applyView();save();
+}
+function center(){const r=stage.getBoundingClientRect();S.view.x=r.width/2;S.view.y=r.height/2;S.view.k=Math.min(1,r.width/1500)}
+
+// ---- ações
+function select(id){S.sel=id;render()}
+function addChild(){
+  const p=byId(S.sel)||root();p.folded=false;
+  const ks=kids(p.id);const side=p.parent===null?(ks.length%2?-1:1):(p.x>=0?1:-1);
+  const last=ks[ks.length-1];
+  const n={id:nid++,text:'Nova ideia',parent:p.id,color:null,done:false,folded:false,x:p.x+side*240,y:last?last.y+46:p.y};
+  if(p.parent===null)n.color=PALETTE[S.nodes.filter(x=>x.parent===p.id).length%PALETTE.length];
+  S.nodes.push(n);S.sel=n.id;render();edit(n.id,true);
+}
+function addSibling(){const n=byId(S.sel);if(!n||n.parent===null)return addChild();S.sel=n.parent;addChild()}
+function del(){const n=byId(S.sel);if(!n||n.parent===null)return;const ids=subtree(n.id);
+  if(ids.length>3&&!confirm(`Apagar "${n.text}" e mais ${ids.length-1} tópicos?`))return;
+  S.nodes=S.nodes.filter(x=>!ids.includes(x.id));S.sel=n.parent;render()}
+function edit(id,selectAll){
+  const el=world.querySelector(`.node[data-id="${id}"]`);if(!el)return;
+  el.querySelector('.fold')?.remove();
+  el.contentEditable=true;el.focus();
+  const r=document.createRange();r.selectNodeContents(el);if(!selectAll)r.collapse(false);
+  const s=getSelection();s.removeAllRanges();s.addRange(r);
+  const finish=()=>{el.contentEditable=false;const n=byId(id);if(n){n.text=el.innerText.trim()||'…'}render()};
+  el.addEventListener('blur',finish,{once:true});
+  el.addEventListener('keydown',e=>{
+    if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();el.blur()}
+    if(e.key==='Escape'){e.preventDefault();el.blur()}
+    if(e.key==='Tab'){e.preventDefault();el.blur();addChild()}
+    e.stopPropagation();
+  });
+}
+function toast(t){const e=document.getElementById('toast');e.textContent=t;e.classList.add('show');setTimeout(()=>e.classList.remove('show'),2200)}
+
+// ---- interação com mouse/toque
+let drag=null;
+stage.addEventListener('pointerdown',e=>{
+  const el=e.target.closest('.node');
+  if(el&&el.isContentEditable)return;
+  if(el){const id=+el.dataset.id;if(S.sel!==id)select(id);
+    drag={type:'node',id,sx:e.clientX,sy:e.clientY,orig:subtree(id).map(i=>{const n=byId(i);return[n,n.x,n.y]}),moved:false};
+  }else{drag={type:'pan',sx:e.clientX,sy:e.clientY,vx:S.view.x,vy:S.view.y,moved:false};stage.classList.add('panning')}
+  stage.setPointerCapture(e.pointerId);
+});
+stage.addEventListener('pointermove',e=>{
+  if(!drag)return;const dx=e.clientX-drag.sx,dy=e.clientY-drag.sy;
+  if(Math.abs(dx)+Math.abs(dy)>3)drag.moved=true;
+  if(drag.type==='pan'){S.view.x=drag.vx+dx;S.view.y=drag.vy+dy;applyView()}
+  else if(drag.moved){drag.orig.forEach(([n,x,y])=>{n.x=x+dx/S.view.k;n.y=y+dy/S.view.k});render()}
+});
+stage.addEventListener('pointerup',e=>{
+  if(drag&&drag.type==='pan'&&!drag.moved&&S.sel!==null){S.sel=null;render()}
+  if(drag&&drag.type==='pan')save();
+  drag=null;stage.classList.remove('panning');
+});
+stage.addEventListener('dblclick',e=>{const el=e.target.closest('.node');if(el)edit(+el.dataset.id)});
+stage.addEventListener('wheel',e=>{
+  e.preventDefault();const r=stage.getBoundingClientRect();const mx=e.clientX-r.left,my=e.clientY-r.top;
+  const k=Math.min(2.5,Math.max(.25,S.view.k*(e.deltaY<0?1.1:1/1.1)));
+  S.view.x=mx-(mx-S.view.x)*k/S.view.k;S.view.y=my-(my-S.view.y)*k/S.view.k;S.view.k=k;applyView();save();
+},{passive:false});
+
+document.addEventListener('keydown',e=>{
+  if(document.activeElement&&document.activeElement.isContentEditable)return;
+  const n=byId(S.sel);
+  if(e.key==='Tab'){e.preventDefault();addChild()}
+  else if(e.key==='Enter'){e.preventDefault();addSibling()}
+  else if((e.key==='Delete'||e.key==='Backspace')&&n){e.preventDefault();del()}
+  else if(e.key==='F2'&&n){e.preventDefault();edit(n.id)}
+  else if(e.key===' '&&n){e.preventDefault();n.done=!n.done;render()}
+  else if((e.key==='f'||e.key==='F')&&n){n.folded=!n.folded;render()}
+});
+
+// ---- barra de ferramentas
+const $=id=>document.getElementById(id);
+$('bAdd').onclick=addChild;$('bSib').onclick=addSibling;$('bDel').onclick=del;
+$('bEdit').onclick=()=>S.sel&&edit(S.sel);
+$('bDone').onclick=()=>{const n=byId(S.sel);if(n){n.done=!n.done;render()}};
+$('bLayout').onclick=()=>{layout();render()};
+$('bCenter').onclick=()=>{center();applyView();save()};
+$('bReset').onclick=()=>{if(confirm('Voltar ao mapa original? Suas mudanças neste navegador serão perdidas (baixe o .json antes, se quiser).')){localStorage.removeItem(KEY);S.nodes=[];nid=1;init()}};
+$('bExport').onclick=()=>{
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(exportData(),null,1)],{type:'application/json'}));
+  a.download='mapa.json';a.click();toast('Salve na pasta "ideias" e rode publicar.bat');
+};
+$('bImport').onclick=()=>$('file').click();
+$('file').onchange=async e=>{const f=e.target.files[0];if(!f)return;
+  try{load(JSON.parse(await f.text()));render();toast('Mapa carregado')}catch(err){alert('Arquivo inválido')}e.target.value=''};
+$('bHelp').onclick=()=>$('help').classList.toggle('hide');
+$('bHideHelp').onclick=()=>$('help').classList.add('hide');
+PALETTE.forEach(c=>{const s=document.createElement('span');s.style.background=c;s.title='Cor do ramo';
+  s.onclick=()=>{const n=byId(S.sel);if(n){n.color=c;render()}};$('colors').appendChild(s)});
+window.addEventListener('resize',applyView);
+
+init();
+</script>
+</body>
+</html>
