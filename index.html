@@ -63,6 +63,8 @@
   .node .badges{display:flex;gap:4px;justify-content:center;margin-top:4px}
   .node .badges span{font-size:11px;background:#00000055;border-radius:6px;padding:1px 6px;cursor:pointer}
   body.noAdd .addBtn{display:none!important}
+  body.linking #stage,body.linking .node{cursor:crosshair}
+  body.linking #bLink{background:var(--accent);color:#1d0f0a}
   .node .thumb{display:block;max-width:220px;max-height:160px;margin:8px auto 2px;border-radius:8px;pointer-events:none;-webkit-user-drag:none}
   .node .fold{position:absolute;right:-10px;top:50%;transform:translateY(-50%);width:18px;height:18px;border-radius:50%;background:var(--c);color:#1d0f0a;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}
 
@@ -133,6 +135,7 @@
     <button class="ed" id="bIcon">Ícone</button>
     <button id="bDetails" title="Notas e anexos do tópico">📎 Notas/Anexos</button>
     <button class="ed" id="bDone" title="Espaço">✓ Feito</button>
+    <button class="ed" id="bLink" title="Ligar este tópico a outro (L)">🔗 Ligar</button>
     <button class="ed" id="bDel" title="Delete">Apagar</button>
     <div id="colors" class="ed"></div>
     <span style="flex:1"></span>
@@ -170,6 +173,9 @@
     <b>Renomear</b>, <b>F2</b> ou <b>duplo clique</b> muda o texto<br>
     <b>Tab</b> novo filho · <b>Enter</b> novo irmão · <b>Delete</b> apagar<br>
     <b>Espaço</b> marcar como feito · <b>F</b> recolher/expandir ramo<br>
+    <b>Setas</b> andar pelos tópicos<br>
+    <b>Ctrl+C</b> copiar tópico (com o ramo) · <b>Ctrl+V</b> colar no selecionado · <b>Ctrl+D</b> duplicar — dá para colar em outro mapa<br>
+    <b>L</b> ou <b>🔗 Ligar</b>: depois clique em outro tópico para ligar os dois (repita para desligar)<br>
     <b>Arraste</b> tópicos para mover (o ramo vai junto)<br>
     <b>Arraste o fundo</b> para navegar · <b>roda do mouse</b> para zoom<br>
     <span id="helpSave"></span>
@@ -440,7 +446,11 @@ function render(doSave=true){
     if(n.folded&&kids(n.id).length){const f=document.createElement('span');f.className='fold';f.textContent=subtree(n.id).length-1;el.appendChild(f)}
     world.appendChild(el);
   });
-  svg.innerHTML=paths;applyView();if(doSave)save();
+  // ligações entre tópicos (linha tracejada com seta), criadas com "Ligar" ou a tecla L
+  S.nodes.forEach(a=>(a.links||[]).forEach(bid=>{const b=byId(bid);if(!b||hidden(a)||hidden(b))return;
+    const mx=(a.x+b.x)/2,my=(a.y+b.y)/2,dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy)||1,bend=Math.min(120,len*.25);
+    paths+=`<path d="M${a.x},${a.y} Q${mx-dy/len*bend},${my+dx/len*bend} ${b.x},${b.y}" stroke="#e9c27a" stroke-width="2" stroke-dasharray="7 6" fill="none" opacity=".9" marker-end="url(#seta)"/>`}));
+  svg.innerHTML='<defs><marker id="seta" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e9c27a"/></marker></defs>'+paths;applyView();if(doSave)save();
 }
 
 // anexo que é foto (pelo nome ou pelo endereço) aparece dentro do tópico
@@ -483,6 +493,8 @@ stage.addEventListener('pointerdown',e=>{
   closePops();
   if(e.target.closest('[contenteditable=true]'))return;
   const el=e.target.closest('.node');
+  if(el&&linkFrom!==null){finishLink(+el.dataset.id);return}
+  if(!el&&linkFrom!==null)cancelLink();
   if(el){const id=+el.dataset.id;if(S.sel!==id)select(id);
     if(e.target.dataset.p){openPanel();return}
     drag=CAN_EDIT?{type:'node',sx:e.clientX,sy:e.clientY,orig:subtree(id).map(i=>{const n=byId(i);return[n,n.x,n.y]}),moved:false}:null}
@@ -506,12 +518,61 @@ stage.addEventListener('wheel',e=>{
   S.view.x=mx-(mx-S.view.x)*k/S.view.k;S.view.y=my-(my-S.view.y)*k/S.view.k;S.view.k=k;applyView();saveView();
 },{passive:false});
 
+// ---------- ligar tópicos ----------
+let linkFrom=null;
+function startLink(){if(!CAN_EDIT)return;if(!S.sel)return toast('Selecione o tópico de origem');
+  linkFrom=S.sel;document.body.classList.add('linking');toast('Agora clique no tópico que quer ligar (Esc cancela)')}
+function cancelLink(){linkFrom=null;document.body.classList.remove('linking')}
+function finishLink(id){const a=byId(linkFrom);cancelLink();if(!a||id===a.id)return toast('Ligação cancelada');
+  a.links=a.links||[];const i=a.links.indexOf(id);
+  if(i>=0){a.links.splice(i,1);toast('Ligação removida')}
+  else{const b=byId(id);if(b&&b.links&&b.links.includes(a.id)){b.links.splice(b.links.indexOf(a.id),1);if(!b.links.length)delete b.links;toast('Ligação removida')}else{a.links.push(id);toast('Tópicos ligados')}}
+  if(!a.links.length)delete a.links;S.sel=id;render();refreshPanel()}
+
+// ---------- copiar / colar ramo (funciona entre mapas) ----------
+const CLIPKEY='mapas-copia';
+function copyBranch(){const n=byId(S.sel);if(!n)return toast('Selecione um tópico');
+  const ids=subtree(n.id);const set=new Set(ids);
+  const data=ids.map(i=>{const x=JSON.parse(JSON.stringify(byId(i)));if(x.links){x.links=x.links.filter(l=>set.has(l));if(!x.links.length)delete x.links}return x});
+  try{localStorage.setItem(CLIPKEY,JSON.stringify(data))}catch(e){}
+  toast(ids.length>1?`Copiado: "${n.text.split('\n')[0]}" + ${ids.length-1} tópico(s)`:`Copiado: "${n.text.split('\n')[0]}"`)}
+function pasteBranch(){if(!CAN_EDIT)return;let data=null;try{data=JSON.parse(localStorage.getItem(CLIPKEY))}catch(e){}
+  if(!data||!data.length)return toast('Nada copiado ainda (use Ctrl+C num tópico)');
+  const p=byId(S.sel)||root();p.folded=false;const top=data[0];
+  const ks=kids(p.id);const side=p.parent===null?(ks.length%2?-1:1):(p.x>=0?1:-1);const last=ks[ks.length-1];
+  const dx=p.x+side*250-top.x,dy=(last?last.y+60:p.y)-top.y;let next=nextId();const map=new Map();
+  data.forEach(x=>map.set(x.id,next++));
+  data.forEach(x=>{const n={...x,id:map.get(x.id),parent:x===top?p.id:map.get(x.parent),x:x.x+dx,y:x.y+dy};
+    if(x.links)n.links=x.links.map(l=>map.get(l));
+    if(x===top&&p.parent===null&&!n.color)n.color=PALETTE[ks.length%PALETTE.length];
+    S.nodes.push(n)});
+  CUR.nodes=S.nodes;S.sel=map.get(top.id);render();refreshPanel();toast('Colado')}
+
+// ---------- andar pelos tópicos com as setas ----------
+function moveSel(key){
+  const n=byId(S.sel);const visKids=id=>kids(id).filter(k=>!hidden(k)).sort((a,b)=>a.y-b.y);
+  if(!n){const r=root();if(r)select(r.id);return}
+  const r=root();let t=null;
+  if(key==='ArrowUp'||key==='ArrowDown'){if(n.parent===null)return;
+    const sib=visKids(n.parent).filter(s=>(s.x>=r.x)===(n.x>=r.x));const i=sib.indexOf(n);t=sib[i+(key==='ArrowUp'?-1:1)]}
+  else{const right=key==='ArrowRight';
+    if(n.parent===null){t=visKids(n.id).find(k=>(k.x>=n.x)===right)}
+    else{const outward=(n.x>=r.x)===right;t=outward?(n.folded?null:visKids(n.id)[0]):byId(n.parent)}}
+  if(t)select(t.id)}
+
 document.addEventListener('keydown',e=>{
   if(!CUR)return;const a=document.activeElement;if(a&&(a.isContentEditable||a.tagName==='INPUT'||a.tagName==='TEXTAREA'))return;
-  if(e.key==='Escape'){closePops();$('panel').classList.add('hidden');return}
+  if(e.key==='Escape'){closePops();cancelLink();$('panel').classList.add('hidden');return}
+  if(e.key.startsWith('Arrow')){e.preventDefault();moveSel(e.key);return}
+  const ctrl=e.ctrlKey||e.metaKey,k=e.key.toLowerCase();
+  if(ctrl&&k==='c'){if(getSelection().toString())return;e.preventDefault();copyBranch();return}
   if(!CAN_EDIT)return;
   const n=byId(S.sel);
-  if(e.key==='Tab'){e.preventDefault();addChild()}
+  if(ctrl&&k==='v'){e.preventDefault();pasteBranch();return}
+  if(ctrl&&k==='d'&&n&&n.parent!==null){e.preventDefault();copyBranch();S.sel=n.parent;pasteBranch();return}
+  if(ctrl)return;
+  if(k==='l'&&n){e.preventDefault();startLink()}
+  else if(e.key==='Tab'){e.preventDefault();addChild()}
   else if(e.key==='Enter'){e.preventDefault();addSibling()}
   else if((e.key==='Delete'||e.key==='Backspace')&&n){e.preventDefault();del()}
   else if(e.key==='F2'&&n){e.preventDefault();rename(n.id)}
@@ -522,6 +583,7 @@ document.addEventListener('keydown',e=>{
 // ---------- barra ----------
 $('bBack').onclick=()=>{location.hash=''};
 $('bAdd').onclick=addChild;$('bSib').onclick=addSibling;$('bDel').onclick=del;
+$('bLink').onclick=()=>linkFrom!==null?cancelLink():startLink();
 // ocultar temporariamente os botões "+ Filho" e "+ Irmão" (lembrado neste navegador)
 function setNoAdd(on){document.body.classList.toggle('noAdd',on);$('bToggleAdd').textContent=on?'⊕':'⊖';
   $('bToggleAdd').title=on?'Mostrar os botões + Filho e + Irmão':'Ocultar os botões + Filho e + Irmão (os atalhos Tab e Enter continuam funcionando)';
