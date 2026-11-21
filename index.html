@@ -179,7 +179,7 @@
 <div id="toast"></div>
 
 <script>
-const KEY='mapas-mentais-v2', OLDKEY='mapa-ideias-grecia-v1', VIEWKEY='mapas-views', PASSKEY='mapas-senha';
+const KEY='mapas-mentais-v2', CLOUDKEY='mapas-nuvem-cache', OLDKEY='mapa-ideias-grecia-v1', VIEWKEY='mapas-views', PASSKEY='mapas-senha';
 const PALETTE=['#c8862f','#d9534f','#5b9bd5','#6aa84f','#a678c9','#e0b84a','#4fb3a9','#cf6f9a'];
 const ICONS=['⭐','✅','❗','❓','💡','🔥','📌','📅','💰','👤','👥','🎯','🚀','⚠️','🐞','🔧','📝','📚','🎨','💬','❌','🏛️','🌐','📱','💻','🛒','📈','🔒','❤️','👍','⏳','🏁'];
 const $=id=>document.getElementById(id);
@@ -222,7 +222,18 @@ let VIEWS={};try{VIEWS=JSON.parse(localStorage.getItem(VIEWKEY))||{}}catch(e){}
 const pending=new Map(); // id do mapa -> timer de envio
 let saving=0, lastErr='';
 
-function persistLocal(){try{localStorage.setItem(KEY,JSON.stringify(DB))}catch(e){}}
+function persistLocal(){try{localStorage.setItem(CLOUD?CLOUDKEY:KEY,JSON.stringify(DB))}catch(e){}}
+// mapas que existem só neste navegador (de antes da nuvem) e ainda não estão na nuvem
+function localOnlyMaps(){
+  let local=[];try{local=(JSON.parse(localStorage.getItem(KEY))||{}).maps||[]}catch(e){}
+  if(!local.length){try{const old=JSON.parse(localStorage.getItem(OLDKEY));if(old&&old.nodes&&old.nodes.length){const r=old.nodes.find(n=>n.parent===null);local=[{id:'antigo-grecia',name:(r?r.text:'Grécia Antiga').split('\n')[0],nodes:old.nodes,updated:Date.now()}]}}catch(e){}}
+  const ids=new Set(DB.maps.map(m=>m.id));return local.filter(m=>m&&m.nodes&&m.nodes.length&&!ids.has(m.id));
+}
+function offerUpload(){
+  const extra=localOnlyMaps();if(!extra.length||!CAN_EDIT)return;
+  if(confirm(`Encontrei ${extra.length} mapa(s) salvos só neste navegador:\n\n• ${extra.map(m=>m.name).join('\n• ')}\n\nEnviar para a nuvem?`)){
+    extra.forEach(m=>{m.updated=m.updated||Date.now();DB.maps.push(m);pushMap(m)});persistLocal();if(!CUR)showHome();toast(extra.length+' mapa(s) enviados para a nuvem')}
+}
 function saveViews(){try{localStorage.setItem(VIEWKEY,JSON.stringify(VIEWS))}catch(e){}}
 function plain(m){return {id:m.id,name:m.name,nodes:m.nodes,updated:m.updated}}
 
@@ -248,7 +259,8 @@ function setStatus(){
   $('bLogoutHome').classList.toggle('hidden',!(CLOUD&&CAN_EDIT));
   document.body.classList.toggle('ro',!CAN_EDIT);
   $('helpSave').innerHTML=CLOUD?'Tudo é salvo <b>na nuvem</b> automaticamente.':'Tudo é salvo <b>neste navegador</b> automaticamente.';
-  $('homeSub').textContent=CAN_EDIT?'Escolha um mapa para abrir ou crie um novo.':'Escolha um mapa para ver. Para editar, clique em "Entrar para editar".';
+  const nLocal=CLOUD&&!CAN_EDIT?localOnlyMaps().length:0;
+  $('homeSub').textContent=nLocal?`Você tem ${nLocal} mapa(s) salvos neste navegador. Clique em "Entrar para editar" para enviá-los à nuvem.`:CAN_EDIT?'Escolha um mapa para abrir ou crie um novo.':'Escolha um mapa para ver. Para editar, clique em "Entrar para editar".';
 }
 
 function queueSave(m){
@@ -272,9 +284,7 @@ async function login(){
   const s=prompt('Senha para editar:');if(!s)return;
   const old=SENHA;SENHA=s;
   try{await api('POST','?acao=login');localStorage.setItem(PASSKEY,s);CAN_EDIT=true;lastErr='';toast('Pronto! Agora você pode editar');
-    // primeira vez: nuvem vazia e mapas neste navegador -> envia
-    if(!DB.maps.length){const local=JSON.parse(localStorage.getItem(KEY)||'{"maps":[]}').maps||[];
-      if(local.length&&confirm(`A nuvem está vazia. Enviar os ${local.length} mapas deste navegador para lá?`)){DB.maps=local;local.forEach(m=>pushMap(m))}}
+    offerUpload();
   }catch(e){SENHA=old;toast(e.message)}
   setStatus();route();
 }
@@ -290,7 +300,8 @@ async function boot(){
   if(CLOUD){
     CAN_EDIT=false;
     if(SENHA){try{await api('POST','?acao=login');CAN_EDIT=true}catch(e){SENHA='';localStorage.removeItem(PASSKEY)}}
-    persistLocal();setInterval(poll,4000);
+    persistLocal();setInterval(poll,6000);
+    setTimeout(offerUpload,500);
   }else{
     // 2) modo local
     try{DB=JSON.parse(localStorage.getItem(KEY))||{maps:[]}}catch(e){DB={maps:[]}}
@@ -308,7 +319,7 @@ async function boot(){
   setStatus();route();
 }
 
-// busca alterações feitas por outras pessoas (a cada 4 s)
+// busca alterações feitas por outras pessoas (a cada 6 s)
 let polling=false;
 async function poll(){
   if(polling||document.hidden)return;polling=true;
