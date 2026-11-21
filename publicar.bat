@@ -13,14 +13,10 @@ if errorlevel 1 (
 
 rem ---------- Primeira vez: liga a pasta ao repositorio do GitHub ----------
 if not exist ".git" (
-  echo Primeira vez: vamos ligar esta pasta ao GitHub.
-  echo Crie um repositorio VAZIO em https://github.com/new ^(sem README^)
-  echo e cole o link dele aqui. Exemplo: https://github.com/seu-usuario/mapa-grecia.git
-  echo.
-  set /p REPO=Link do repositorio: 
+  echo Primeira vez: ligando esta pasta ao GitHub...
   git init
   git branch -M main
-  call git remote add origin %%REPO%%
+  git remote add origin https://github.com/rodrigofblopes/mapamental.git
 )
 
 rem ---------- Envia as mudancas ----------
@@ -41,6 +37,6 @@ echo.
 echo ============================================
 echo   Enviado para o GitHub!
 echo   A Vercel atualiza o site sozinha em ~1 minuto.
-echo   Mapa de ideias:  ^<seu-link^>/ideias
+echo   Site: https://mapamental-kappa.vercel.app
 echo ============================================
 pause
