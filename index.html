@@ -66,7 +66,11 @@
   body.linking #stage,body.linking .node{cursor:crosshair}
   body.linking #bLink{background:var(--accent);color:#1d0f0a}
   .node .thumb{display:block;max-width:220px;max-height:160px;margin:8px auto 2px;border-radius:8px;pointer-events:none;-webkit-user-drag:none}
-  .node .fold{position:absolute;right:-10px;top:50%;transform:translateY(-50%);width:18px;height:18px;border-radius:50%;background:var(--c);color:#1d0f0a;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}
+  .node .fold{position:absolute;right:-11px;top:50%;transform:translateY(-50%);min-width:20px;height:20px;padding:0 4px;border-radius:10px;background:var(--c);color:#1d0f0a;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid #1d0f0a}
+  .node .fold.l{right:auto;left:-11px}
+  .node .fold.open{opacity:.55;font-size:14px}
+  .node .fold:hover{opacity:1;transform:translateY(-50%) scale(1.15)}
+  .node.drop{outline:3px dashed #9fd39a;outline-offset:4px}
 
   /* menus suspensos */
   .pop{position:fixed;top:56px;background:var(--panel);border:1px solid #5a3424;border-radius:10px;padding:10px;z-index:30;box-shadow:0 10px 30px rgba(0,0,0,.5)}
@@ -176,7 +180,8 @@
     <b>Setas</b> andar pelos tópicos<br>
     <b>Ctrl+C</b> copiar tópico (com o ramo) · <b>Ctrl+V</b> colar no selecionado · <b>Ctrl+D</b> duplicar — dá para colar em outro mapa<br>
     <b>L</b> ou <b>🔗 Ligar</b>: depois clique em outro tópico para ligar os dois (repita para desligar)<br>
-    <b>Arraste</b> tópicos para mover (o ramo vai junto)<br>
+    <b>Arraste</b> tópicos para mover (o ramo vai junto) · <b>solte em cima de outro</b> para virar filho dele<br>
+    <b>Bolinha</b> ao lado do tópico: clique para recolher/expandir o ramo<br>
     <b>Arraste o fundo</b> para navegar · <b>roda do mouse</b> para zoom<br>
     <span id="helpSave"></span>
     <div style="text-align:right;margin-top:6px"><button id="bHideHelp">Ok</button></div>
@@ -443,7 +448,9 @@ function render(doSave=true){
     const na=(n.atts||[]).length;
     if(n.note||na){const b=document.createElement('div');b.className='badges';
       b.innerHTML=(n.note?'<span data-p="1" title="Tem notas">📝</span>':'')+(na?`<span data-p="1" title="Anexos">📎 ${na}</span>`:'');el.appendChild(b)}
-    if(n.folded&&kids(n.id).length){const f=document.createElement('span');f.className='fold';f.textContent=subtree(n.id).length-1;el.appendChild(f)}
+    if((d>0||n.folded)&&kids(n.id).length){const f=document.createElement('span');const r0=root();
+      f.className='fold'+(r0&&n.x<r0.x?' l':'')+(n.folded?'':' open');f.dataset.fold='1';
+      f.textContent=n.folded?subtree(n.id).length-1:'−';f.title=n.folded?'Expandir ramo (F)':'Recolher ramo (F)';el.appendChild(f)}
     world.appendChild(el);
   });
   // ligações entre tópicos (linha tracejada com seta), criadas com "Ligar" ou a tecla L
@@ -497,6 +504,7 @@ stage.addEventListener('pointerdown',e=>{
   if(!el&&linkFrom!==null)cancelLink();
   if(el){const id=+el.dataset.id;if(S.sel!==id)select(id);
     if(e.target.dataset.p){openPanel();return}
+    if(e.target.dataset.fold){const fn=byId(id);fn.folded=!fn.folded;render(CAN_EDIT);return}
     drag=CAN_EDIT?{type:'node',sx:e.clientX,sy:e.clientY,orig:subtree(id).map(i=>{const n=byId(i);return[n,n.x,n.y]}),moved:false}:null}
   else{drag={type:'pan',sx:e.clientX,sy:e.clientY,vx:S.view.x,vy:S.view.y,moved:false};stage.classList.add('panning')}
   if(drag)stage.setPointerCapture(e.pointerId);
@@ -504,9 +512,24 @@ stage.addEventListener('pointerdown',e=>{
 stage.addEventListener('pointermove',e=>{
   if(!drag)return;const dx=e.clientX-drag.sx,dy=e.clientY-drag.sy;if(Math.abs(dx)+Math.abs(dy)>3)drag.moved=true;
   if(drag.type==='pan'){S.view.x=drag.vx+dx;S.view.y=drag.vy+dy;applyView()}
-  else if(drag.moved){drag.orig.forEach(([n,x,y])=>{n.x=x+dx/S.view.k;n.y=y+dy/S.view.k});render(false)}
+  else if(drag.moved){drag.orig.forEach(([n,x,y])=>{n.x=x+dx/S.view.k;n.y=y+dy/S.view.k});render(false);
+    drag.target=dropTarget(e);if(drag.target){const t=world.querySelector(`.node[data-id="${drag.target}"]`);if(t)t.classList.add('drop')}}
 });
+// tópico (fora do ramo arrastado) que está debaixo do ponteiro
+function dropTarget(e){const mine=new Set(drag.orig.map(([n])=>n.id));
+  for(const el of document.elementsFromPoint(e.clientX,e.clientY)){const nd=el.closest&&el.closest('.node');if(nd&&!mine.has(+nd.dataset.id))return +nd.dataset.id}return null}
+function reparent(id,pid){const n=byId(id),p=byId(pid);if(!n||!p||n.parent===pid)return false;
+  const ks=kids(p.id);const side=p.parent===null?(ks.length%2?-1:1):(p.x>=root().x?1:-1);const last=ks[ks.length-1];
+  const dx=p.x+side*250-n.x,dy=(last?last.y+60:p.y)-n.y;
+  subtree(id).forEach(i=>{const m=byId(i);m.x+=dx;m.y+=dy});
+  const wasLvl1=depth(n)===1;n.parent=pid;p.folded=false;
+  if(p.parent===null&&!n.color)n.color=PALETTE[ks.length%PALETTE.length];else if(p.parent!==null&&wasLvl1)n.color=null;
+  return true}
 stage.addEventListener('pointerup',()=>{
+  if(drag&&drag.type==='node'&&drag.moved&&drag.target){const id=drag.orig[0][0].id;
+    // devolve o ramo à posição original antes de mudar de pai
+    drag.orig.forEach(([n,x,y])=>{n.x=x;n.y=y});
+    if(reparent(id,drag.target)){const p=byId(drag.target);toast('Movido para dentro de "'+p.text.split('\n')[0]+'"');render();drag=null;stage.classList.remove('panning');return}}
   if(drag&&drag.type==='pan'){if(!drag.moved&&S.sel!==null){S.sel=null;render(false);refreshPanel()}saveView()}
   else if(drag&&drag.moved)save();
   drag=null;stage.classList.remove('panning');
@@ -535,6 +558,9 @@ function copyBranch(){const n=byId(S.sel);if(!n)return toast('Selecione um tópi
   const ids=subtree(n.id);const set=new Set(ids);
   const data=ids.map(i=>{const x=JSON.parse(JSON.stringify(byId(i)));if(x.links){x.links=x.links.filter(l=>set.has(l));if(!x.links.length)delete x.links}return x});
   try{localStorage.setItem(CLIPKEY,JSON.stringify(data))}catch(e){}
+  // também vai para a área de transferência como texto (para colar no WhatsApp, Word etc.)
+  try{const lv=x=>{let d=0,q=x;while(q.id!==n.id){q=data.find(y=>y.id===q.parent);d++}return d};
+    navigator.clipboard&&navigator.clipboard.writeText(data.map(x=>'  '.repeat(lv(x))+'- '+x.text.replace(/\n/g,' ')).join('\n')).catch(()=>{})}catch(e){}
   toast(ids.length>1?`Copiado: "${n.text.split('\n')[0]}" + ${ids.length-1} tópico(s)`:`Copiado: "${n.text.split('\n')[0]}"`)}
 function pasteBranch(){if(!CAN_EDIT)return;let data=null;try{data=JSON.parse(localStorage.getItem(CLIPKEY))}catch(e){}
   if(!data||!data.length)return toast('Nada copiado ainda (use Ctrl+C num tópico)');
@@ -565,7 +591,7 @@ document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){closePops();cancelLink();$('panel').classList.add('hidden');return}
   if(e.key.startsWith('Arrow')){e.preventDefault();moveSel(e.key);return}
   const ctrl=e.ctrlKey||e.metaKey,k=e.key.toLowerCase();
-  if(ctrl&&k==='c'){if(getSelection().toString())return;e.preventDefault();copyBranch();return}
+  if(ctrl&&k==='c'){const s=getSelection();if(s.toString()&&$('panel').contains(s.anchorNode))return;e.preventDefault();copyBranch();return}
   if(!CAN_EDIT)return;
   const n=byId(S.sel);
   if(ctrl&&k==='v'){e.preventDefault();pasteBranch();return}
