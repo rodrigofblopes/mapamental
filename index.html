@@ -62,6 +62,8 @@
   .node .t[contenteditable=true]{cursor:text;user-select:text;outline:2px solid var(--accent);border-radius:4px;padding:0 3px;display:inline-block;min-width:20px}
   .node .badges{display:flex;gap:4px;justify-content:center;margin-top:4px}
   .node .badges span{font-size:11px;background:#00000055;border-radius:6px;padding:1px 6px;cursor:pointer}
+  body.noAdd .addBtn{display:none!important}
+  .node .thumb{display:block;max-width:220px;max-height:160px;margin:8px auto 2px;border-radius:8px;pointer-events:none;-webkit-user-drag:none}
   .node .fold{position:absolute;right:-10px;top:50%;transform:translateY(-50%);width:18px;height:18px;border-radius:50%;background:var(--c);color:#1d0f0a;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}
 
   /* menus suspensos */
@@ -124,8 +126,9 @@
   <div id="bar">
     <button id="bBack">← Mapas</button>
     <span id="mapTitle"></span>
-    <button class="pri ed" id="bAdd" title="Tab">+ Filho</button>
-    <button class="ed" id="bSib" title="Enter">+ Irmão</button>
+    <button class="ed" id="bToggleAdd" title="Ocultar / mostrar os botões + Filho e + Irmão (os atalhos Tab e Enter continuam funcionando)">⊖</button>
+    <button class="pri ed addBtn" id="bAdd" title="Tab">+ Filho</button>
+    <button class="ed addBtn" id="bSib" title="Enter">+ Irmão</button>
     <button class="ed" id="bRename" title="F2 ou duplo clique">Renomear</button>
     <button class="ed" id="bIcon">Ícone</button>
     <button id="bDetails" title="Notas e anexos do tópico">📎 Notas/Anexos</button>
@@ -193,26 +196,11 @@ function treeToNodes(t){
   return nodes;
 }
 const T=(text,children=[],extra={})=>({text,children,...extra});
-function seedGrecia(){
-  return T('Grécia Antiga',[
-    T('Conteúdo atual',[
-      T('Cidades',[T('Atenas — origem, história, legado'),T('Esparta? (ainda falta)'),T('Corinto? (ainda falta)')]),
-      T('Geografia',[T('Península Balcânica + ilhas do Egeu'),T('Relevo montanhoso → cidades-estado'),T('Clima mediterrâneo')]),
-      T('Figuras',[T('Sócrates'),T('Platão'),T('Aristóteles'),T('Péricles'),T('Alexandre, o Grande')]),
-      T('Cultura',[T('Teatro: Ésquilo, Aristófanes'),T('Mitologia'),T('Jogos Olímpicos'),T('Arquitetura')]),
-      T('Guerras',[T('Guerra de Troia'),T('Guerras Médicas'),T('Guerra do Peloponeso'),T('Conquistas de Alexandre')]),
-      T('Deuses',[T('Zeus, Hera, Poseidon'),T('Atena, Apolo, Ártemis'),T('Afrodite, Hades')])
-    ],{color:'#c8862f'}),
-    T('Ideias de conteúdo',[T('Pontos clicáveis no mapa'),T('Linha do tempo'),T('Quiz no final'),T('Imagens nos modais'),T('Fontes / referências')],{color:'#6aa84f'}),
-    T('Melhorias técnicas',[T('Site responsivo'),T('main.js: um loop só para os modais'),T('Fechar modal com Esc'),T('Texto alternativo (alt) nas imagens')],{color:'#5b9bd5'}),
-    T('Equipe / prazos',[T('Otavio'),T('Everton'),T('Data de entrega: ?')],{color:'#e0b84a'})
-  ],{color:'#652716'});
-}
 function newMap(name,tree){
   const m={id:uid(),name,nodes:treeToNodes(tree||T(name,[],{color:'#652716'})),updated:Date.now()};
   m.nodes[0].text=name;layoutNodes(m.nodes);return m;
 }
-function seedAll(){const g=newMap('Grécia Antiga',seedGrecia());const s=newMap('Site');s.updated+=1;return [s,g]}
+function seedAll(){return [newMap('Meu primeiro mapa')]}
 
 // ================= armazenamento: local + nuvem =================
 let DB={maps:[]};
@@ -226,8 +214,8 @@ function persistLocal(){try{localStorage.setItem(CLOUD?CLOUDKEY:KEY,JSON.stringi
 // mapas que existem só neste navegador (de antes da nuvem) e ainda não estão na nuvem
 function localOnlyMaps(){
   let local=[];try{local=(JSON.parse(localStorage.getItem(KEY))||{}).maps||[]}catch(e){}
-  if(!local.length){try{const old=JSON.parse(localStorage.getItem(OLDKEY));if(old&&old.nodes&&old.nodes.length){const r=old.nodes.find(n=>n.parent===null);local=[{id:'antigo-grecia',name:(r?r.text:'Grécia Antiga').split('\n')[0],nodes:old.nodes,updated:Date.now()}]}}catch(e){}}
-  const ids=new Set(DB.maps.map(m=>m.id));return local.filter(m=>m&&m.nodes&&m.nodes.length&&!ids.has(m.id));
+  // o mapa de exemplo "Grécia Antiga" (antigo) não volta mais para a nuvem
+  const ids=new Set(DB.maps.map(m=>m.id));return local.filter(m=>m&&m.nodes&&m.nodes.length&&!ids.has(m.id)&&m.id!=='antigo-grecia'&&m.name!=='Grécia Antiga');
 }
 function offerUpload(){
   const extra=localOnlyMaps();if(!extra.length||!CAN_EDIT)return;
@@ -308,11 +296,7 @@ async function boot(){
     if(!DB.maps||!DB.maps.length){
       DB={maps:[]};
       try{const r=await fetch('mapas.json',{cache:'no-store'});if(r.ok){const d=await r.json();if(d.maps&&d.maps.length)DB.maps=d.maps}}catch(e){}
-      if(!DB.maps.length){
-        DB.maps=seedAll();
-        try{const old=JSON.parse(localStorage.getItem(OLDKEY));if(old&&old.nodes&&old.nodes.length){
-          const g=DB.maps.find(m=>m.name==='Grécia Antiga');g.nodes=old.nodes;g.nodes.find(n=>n.parent===null).text='Grécia Antiga'}}catch(e){}
-      }
+      if(!DB.maps.length)DB.maps=seedAll();
       persistLocal();
     }
   }
@@ -424,7 +408,9 @@ function layoutNodes(nodes){
   const r=nodes.find(n=>n.parent===null);if(!r)return;r.x=0;r.y=0;
   const GAPY=60,GAPX=[0,330,280,270];
   const k=id=>kidsOf(nodes,id);
-  function size(n){const c=n.folded?[]:k(n.id);return c.length?c.reduce((s,x)=>s+size(x),0):1}
+  // altura aproximada do tópico (linhas de texto + foto), em "linhas" de 60px
+  const own=n=>Math.max(1,Math.ceil((String(n.text).split('\n').length*19+30+((n.atts||[]).some(isImage)?170:0))/GAPY));
+  function size(n){const c=n.folded?[]:k(n.id);return Math.max(own(n),c.reduce((s,x)=>s+size(x),0))}
   const right=[],left=[];let sr=0,sl=0;
   k(r.id).forEach(n=>{const z=size(n);if(sr<=sl){right.push(n);sr+=z}else{left.push(n);sl+=z}});
   function place(n,dir,x,yTop,d){const h=size(n)*GAPY;n.x=x;n.y=yTop+h/2;if(n.folded)return;let y=yTop;
@@ -446,6 +432,8 @@ function render(doSave=true){
     el.style.left=n.x+'px';el.style.top=n.y+'px';el.style.setProperty('--c',colorOf(n));el.dataset.id=n.id;
     if(n.icon){const i=document.createElement('span');i.className='ic';i.textContent=n.icon;el.appendChild(i)}
     const t=document.createElement('span');t.className='t';t.textContent=n.text;el.appendChild(t);
+    const foto=(n.atts||[]).find(isImage);
+    if(foto){const im=document.createElement('img');im.className='thumb';im.crossOrigin='anonymous';im.alt=foto.nome||'foto';im.draggable=false;im.src=foto.url;el.appendChild(im)}
     const na=(n.atts||[]).length;
     if(n.note||na){const b=document.createElement('div');b.className='badges';
       b.innerHTML=(n.note?'<span data-p="1" title="Tem notas">📝</span>':'')+(na?`<span data-p="1" title="Anexos">📎 ${na}</span>`:'');el.appendChild(b)}
@@ -455,6 +443,9 @@ function render(doSave=true){
   svg.innerHTML=paths;applyView();if(doSave)save();
 }
 
+// anexo que é foto (pelo nome ou pelo endereço) aparece dentro do tópico
+const IMG_RE=/\.(jpe?g|png|gif|webp|avif|bmp|svg)$/i;
+const isImage=a=>!!(a&&a.url&&(IMG_RE.test(a.nome||'')||IMG_RE.test(a.url.split(/[?#]/)[0])));
 function select(id){S.sel=id;render(false);refreshPanel()}
 function addChild(){
   if(!CAN_EDIT)return;
@@ -531,6 +522,12 @@ document.addEventListener('keydown',e=>{
 // ---------- barra ----------
 $('bBack').onclick=()=>{location.hash=''};
 $('bAdd').onclick=addChild;$('bSib').onclick=addSibling;$('bDel').onclick=del;
+// ocultar temporariamente os botões "+ Filho" e "+ Irmão" (lembrado neste navegador)
+function setNoAdd(on){document.body.classList.toggle('noAdd',on);$('bToggleAdd').textContent=on?'⊕':'⊖';
+  $('bToggleAdd').title=on?'Mostrar os botões + Filho e + Irmão':'Ocultar os botões + Filho e + Irmão (os atalhos Tab e Enter continuam funcionando)';
+  try{localStorage.setItem('mapas-ocultar-add',on?'1':'')}catch(e){}}
+setNoAdd(localStorage.getItem('mapas-ocultar-add')==='1');
+$('bToggleAdd').onclick=()=>setNoAdd(!document.body.classList.contains('noAdd'));
 $('bRename').onclick=()=>S.sel?rename(S.sel):toast('Clique num tópico e depois em Renomear');
 $('bDone').onclick=()=>{const n=byId(S.sel);if(n){n.done=!n.done;render()}else toast('Selecione um tópico')};
 $('bLayout').onclick=()=>{layoutNodes(S.nodes);render()};
@@ -594,6 +591,8 @@ function loadScript(src){return new Promise((ok,fail)=>{const s=document.createE
 async function snapshot(jpeg){
   if(!window.htmlToImage)await loadScript('https://cdn.jsdelivr.net/npm/html-to-image@1.11.13/dist/html-to-image.js');
   const prevSel=S.sel;S.sel=null;render(false);
+  // espera as fotos dos tópicos carregarem antes de medir e fotografar o mapa
+  await Promise.all([...world.querySelectorAll('img.thumb')].map(i=>i.complete?0:new Promise(r=>{i.onload=i.onerror=r})));
   const els=[...world.querySelectorAll('.node')];
   let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
   els.forEach(el=>{const w=el.offsetWidth,h=el.offsetHeight,x=parseFloat(el.style.left),y=parseFloat(el.style.top);
