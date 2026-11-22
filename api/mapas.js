@@ -29,6 +29,7 @@ export default async function handler(req, res) {
       const m = req.body && req.body.map;
       if (!m || !m.id || !Array.isArray(m.nodes)) return res.status(400).json({ erro: 'Mapa inválido' });
       const limpo = { id: String(m.id), name: String(m.name || 'Mapa').slice(0, 200), nodes: m.nodes, updated: Date.now() };
+      if (m.grupo) limpo.grupo = String(m.grupo).slice(0, 200);   // grupo / subgrupo do mapa (ex.: "Incorporação Imobiliária / Financiamento")
       await redis('HSET', 'mapas', limpo.id, JSON.stringify(limpo));
       const rev = await redis('INCR', 'mapas:rev');
       return res.json({ ok: true, rev: String(rev), updated: limpo.updated });

@@ -21,6 +21,9 @@
   /* ---------- tela inicial ---------- */
   #home{position:absolute;inset:0;overflow-y:auto;padding:40px 24px}
   #home .wrap{max-width:900px;margin:0 auto}
+  .grupo-h{grid-column:1/-1;margin:22px 0 2px;font-size:20px;color:var(--accent)}
+  .grupo-h:first-child{margin-top:4px}
+  .grupo-sub{grid-column:1/-1;margin:6px 0 0;font-size:14px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
   #homeHead{display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap}
   @media (max-width:600px){#homeHead h1{flex:1 1 100% !important;order:-1;font-size:24px} #homeHead .cloud{font-size:12px}}
   #homeHead h1{font-size:28px;flex:1}
@@ -315,7 +318,7 @@ function offerUpload(){
     extra.forEach(m=>{m.updated=m.updated||Date.now();DB.maps.push(m);pushMap(m)});persistLocal();refreshView();toast(extra.length+' mapa(s) enviados para a nuvem')}
 }
 function saveViews(){try{localStorage.setItem(VIEWKEY,JSON.stringify(VIEWS))}catch(e){}}
-function plain(m){return {id:m.id,name:m.name,nodes:m.nodes,updated:m.updated}}
+function plain(m){const p={id:m.id,name:m.name,nodes:m.nodes,updated:m.updated};if(m.grupo)p.grupo=m.grupo;return p}
 
 async function api(method,qs='',body,headers={}){
   const h={...headers};if(SENHA)h['x-senha']=SENHA;
@@ -445,21 +448,38 @@ function showHome(){
   document.title='Mapas Mentais · Produtividade';
   const g=$('grid');g.innerHTML='';const lista=DB.maps.filter(m=>!isSec(m));
   if(!lista.length)g.innerHTML='<div class="empty">Nenhum mapa ainda.'+(CAN_EDIT?' Crie o primeiro acima.':'')+'</div>';
-  [...lista].sort((a,b)=>b.updated-a.updated).forEach(m=>{
+  // agrupa por "Grupo / Subgrupo"; os mapas sem grupo ficam no fim, em "Outros mapas"
+  const chave=m=>(m.grupo||'').split('/').map(s=>s.trim()).filter(Boolean).join(' / ');
+  const grupos=[...new Set(lista.map(chave))].sort((a,b)=>(!a)-(!b)||a.localeCompare(b,'pt-BR'));
+  let grupoPai=null;
+  grupos.forEach(gk=>{
+    const partes=gk?gk.split(' / '):[];
+    if(grupos.length>1||gk){
+      if(partes[0]!==grupoPai){grupoPai=partes[0]||null;const h=document.createElement('h2');h.className='grupo-h';h.textContent=partes[0]||'Outros mapas';g.appendChild(h)}
+      if(partes.length>1){const h2=document.createElement('h3');h2.className='grupo-sub';h2.textContent=partes.slice(1).join(' › ');g.appendChild(h2)}
+    }
+    lista.filter(m=>chave(m)===gk).sort((a,b)=>b.updated-a.updated).forEach(m=>cardMapa(m,g));
+  });
+}
+function cardMapa(m,g){
+  {
     const c=document.createElement('div');c.className='card';c.style.setProperty('--c',cardColor(m));
     const n=m.nodes.length-1;
     c.innerHTML=`<h3></h3><div class="meta">${n} tópico${n===1?'':'s'} · ${new Date(m.updated).toLocaleDateString('pt-BR')}</div>
-      <div class="acts ed"><button data-a="ren">Renomear</button><button data-a="dup">Duplicar</button><button data-a="del">Apagar</button></div>`;
+      <div class="acts ed"><button data-a="ren">Renomear</button><button data-a="grp">Grupo</button><button data-a="dup">Duplicar</button><button data-a="del">Apagar</button></div>`;
     c.querySelector('h3').textContent=m.name;
     c.onclick=e=>{
       const a=e.target.dataset&&e.target.dataset.a;
       if(a==='ren'){e.stopPropagation();const nn=prompt('Novo nome do mapa:',m.name);if(nn&&nn.trim()){setMapName(m,nn.trim());m.updated=Date.now();queueSave(m);showHome()}}
+      else if(a==='grp'){e.stopPropagation();const ex=[...new Set(DB.maps.filter(x=>!isSec(x)&&x.grupo).map(x=>x.grupo))];
+        const ng=prompt('Grupo do mapa. Use " / " para subgrupo (ex.: Incorporação Imobiliária / Financiamento). Deixe vazio para tirar do grupo.'+(ex.length?'\n\nGrupos que já existem:\n• '+ex.join('\n• '):''),m.grupo||'');
+        if(ng!==null){const v=ng.split('/').map(s=>s.trim()).filter(Boolean).join(' / ');if(v)m.grupo=v;else delete m.grupo;m.updated=Date.now();queueSave(m);showHome()}}
       else if(a==='dup'){e.stopPropagation();const c2=JSON.parse(JSON.stringify(plain(m)));c2.id=uid();setMapName(c2,m.name+' (cópia)');c2.updated=Date.now();DB.maps.push(c2);queueSave(c2);showHome()}
       else if(a==='del'){e.stopPropagation();if(confirm(`Apagar o mapa "${m.name}"? Isso não pode ser desfeito.`)){DB.maps=DB.maps.filter(x=>x!==m);clearTimeout(pending.get(m.id));pending.delete(m.id);persistLocal();removeMapCloud(m.id);showHome()}}
       else location.hash='#/mapa/'+m.id;
     };
     g.appendChild(c);
-  });
+  }
 }
 // nome do mapa = texto do tópico central inteiro, numa linha só
 const oneLine=t=>String(t||'').split('\n').map(s=>s.trim()).filter(Boolean).join(' ')||'Mapa';
