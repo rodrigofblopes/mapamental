@@ -27,7 +27,7 @@ const el = (tag, attrs = {}, ...filhos) => {
   filhos.flat().forEach((f) => f != null && e.append(f));
   return e;
 };
-function pedeEdicao() { if (!CAN_EDIT) { toast('Entre com a senha para editar'); return false; } return true; }
+function pedeEdicao() { if (!CAN_EDIT) { if (typeof login === 'function') login(); else toast('Entre com a senha para editar'); return false; } return true; }
 
 // ---------- tela principal ----------
 function showHub() {

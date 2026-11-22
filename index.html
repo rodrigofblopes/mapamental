@@ -21,13 +21,16 @@
   /* ---------- tela inicial ---------- */
   #home{position:absolute;inset:0;overflow-y:auto;padding:40px 24px}
   #home .wrap{max-width:900px;margin:0 auto}
-  #homeHead{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+  #homeHead{display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap}
+  @media (max-width:600px){#homeHead h1{flex:1 1 100% !important;order:-1;font-size:24px} #homeHead .cloud{font-size:12px}}
   #homeHead h1{font-size:28px;flex:1}
   #homeHead h1.brand{display:flex;align-items:center;gap:12px;letter-spacing:.01em}
   /* ---------- Produtividade e seções ---------- */
   #hub,#sec{position:absolute;inset:0;overflow-y:auto;padding:40px 24px}
   #hub .wrap,#sec .wrap{max-width:1000px;margin:0 auto}
   button.back{font-size:13px}
+  a.site-link{color:var(--muted);text-decoration:none;font-size:13px;border:1px solid #5a3424;border-radius:8px;padding:7px 11px;white-space:nowrap}
+  a.site-link:hover{color:var(--ink);border-color:var(--accent)}
   #hubGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
   a.card{color:inherit;text-decoration:none}
   .hubCard{min-height:150px}
@@ -159,6 +162,7 @@
         <circle cx="32" cy="32" r="8" fill="#c8862f" stroke="#f3e9df" stroke-width="2.5"/></svg>Produtividade</h1>
       <span class="cloud" id="cloudHub"></span>
       <button id="bLoginHub" class="hidden">🔒 Entrar para editar</button>
+      <a class="site-link" href="https://bonfimeng.com.br" title="Voltar ao site da Bonfim Engenharia">‹ Site</a>
     </div>
     <p class="sub">Escolha uma ferramenta.</p>
     <div id="hubGrid"></div>
@@ -172,6 +176,8 @@
       <button class="back" onclick="location.hash='#/'">← Produtividade</button>
       <h1 id="secTitle" style="flex:1"></h1>
       <span class="cloud" id="cloudSec"></span>
+      <button id="bLoginSec" class="hidden">🔒 Entrar para editar</button>
+      <a class="site-link" href="https://bonfimeng.com.br" title="Voltar ao site da Bonfim Engenharia">‹ Site</a>
     </div>
     <p class="sub" id="secSub"></p>
     <div id="secBody"></div>
@@ -187,6 +193,7 @@
       <span class="cloud" id="cloudHome"></span>
       <button id="bLoginHome" class="hidden">🔒 Entrar para editar</button>
       <button id="bLogoutHome" class="hidden">Sair</button>
+      <a class="site-link" href="https://bonfimeng.com.br" title="Voltar ao site da Bonfim Engenharia">‹ Site</a>
     </div>
     <p class="sub" id="homeSub">Escolha um mapa para abrir ou crie um novo.</p>
     <div id="newRow" class="ed">
@@ -327,7 +334,7 @@ function setStatus(){
   else if(!CAN_EDIT){txt='👀 Só visualização';cls=''}
   else{txt='☁️ Salvo na nuvem';cls='ok'}
   ['cloudHome','cloudBar','cloudHub','cloudSec'].forEach(id=>{const e=$(id);if(e){e.textContent=txt;e.className='cloud '+cls}});
-  const lh=$('bLoginHub');if(lh)lh.classList.toggle('hidden',!(CLOUD&&!CAN_EDIT));
+  const lh=$('bLoginHub');if(lh)lh.classList.toggle('hidden',!(CLOUD&&!CAN_EDIT));const ls2=$('bLoginSec');if(ls2)ls2.classList.toggle('hidden',!(CLOUD&&!CAN_EDIT));
   const showLogin=CLOUD&&!CAN_EDIT;
   $('bLoginHome').classList.toggle('hidden',!showLogin);$('bLoginBar').classList.toggle('hidden',!showLogin);
   $('bLogoutHome').classList.toggle('hidden',!(CLOUD&&CAN_EDIT));
@@ -363,7 +370,7 @@ async function login(){
   setStatus();route();
 }
 function logout(silent){SENHA='';localStorage.removeItem(PASSKEY);CAN_EDIT=false;setStatus();if(!silent)route()}
-$('bLoginHome').onclick=login;$('bLoginBar').onclick=login;$('bLoginHub').onclick=login;$('bLogoutHome').onclick=()=>logout();
+$('bLoginHome').onclick=login;$('bLoginBar').onclick=login;$('bLoginHub').onclick=login;$('bLoginSec').onclick=login;$('bLogoutHome').onclick=()=>logout();
 
 async function boot(){
   // 1) tenta a nuvem (só existe no site publicado com o banco configurado)
