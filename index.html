@@ -69,6 +69,20 @@
   .pagTexto{min-height:55vh;resize:vertical;background:#2f1a12;border:1px solid #5a3424;border-radius:10px;color:var(--ink);padding:14px;font-size:15px;line-height:1.6}
   .pagTexto:focus{outline:none;border-color:var(--accent)}
   @media (max-width:700px){.quadro,.notion{grid-template-columns:1fr}}
+  /* Gestão de Atividades: aviso dos cartões de fora da obra */
+  .aviso{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#3a2a12;border:1px solid #8a6a2a;border-radius:10px;padding:10px 12px;margin-bottom:14px;font-size:14px}
+  .aviso span{flex:1;min-width:220px}
+  /* Contas Mensais */
+  .mesNav{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+  .mesNav h3{font-size:20px;min-width:190px;text-align:center}
+  .mesNav button{font-size:18px;padding:4px 14px}.mesNav button.mini{font-size:12px}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:6px}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:3px}
+  .kpi small{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.05em}.kpi b{font-size:18px}
+  .kpi.ok b{color:#9fd39a}.kpi.warn b{color:#e9c27a}.kpi.bad b{color:#f0948f}.kpi.bad{border-color:#8a3a33}
+  .item .valor{font-variant-numeric:tabular-nums;white-space:nowrap}
+  .item.vencida{border-color:#8a3a33;background:#3a1a14}.item.vencida .quando{color:#f0948f;font-weight:600}
+  .item .tag{font-size:11px;color:#4fb3a9;border:1px solid #4fb3a9;border-radius:999px;padding:1px 7px;margin-left:8px;white-space:nowrap}
   #homeHead .logo{width:44px;height:44px;flex:none;filter:drop-shadow(0 3px 8px rgba(0,0,0,.4))}
   #home .sub{color:var(--muted);margin-bottom:24px;font-size:14px}
   #newRow{display:flex;gap:8px;margin-bottom:24px}
@@ -92,9 +106,13 @@
   /* ---------- editor ---------- */
   #editor{position:absolute;inset:0}
   #bar{position:fixed;top:0;left:0;right:0;height:52px;display:flex;align-items:center;gap:7px;padding:0 12px;background:var(--panel);border-bottom:1px solid var(--line);z-index:10;overflow-x:auto}
+  .atalhoDica{font-size:11.5px;color:var(--muted);border:1px dashed #5a3424;border-radius:8px;padding:5px 8px;white-space:nowrap}
   #mapTitle{font-size:16px;font-weight:600;margin:0 6px;white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis}
-  #colors{display:flex;gap:4px}
-  #colors span{width:20px;height:20px;border-radius:50%;cursor:pointer;border:2px solid transparent;flex:none}
+  #colors{display:flex;gap:8px}
+  #bar button.ico{min-width:36px;padding:7px 8px;font-size:15px;line-height:1}
+  #cloudBar{max-width:170px;overflow:hidden;text-overflow:ellipsis}
+  @media (max-width:1150px){.atalhoDica{display:none}}
+  #colors span{width:26px;height:26px;border-radius:50%;cursor:pointer;border:2px solid transparent;flex:none}
   #colors span:hover{border-color:#fff}
   #stage{position:absolute;inset:52px 0 0 0;cursor:grab;touch-action:none}
   #stage.panning{cursor:grabbing}
@@ -172,7 +190,7 @@
   </div>
 </div>
 
-<!-- ===== SEÇÃO (Meta Diária, Trello, Notion, Lean) ===== -->
+<!-- ===== SEÇÃO (Missão, Trello, Notion, Lean) ===== -->
 <div id="sec" class="hidden">
   <div class="wrap">
     <div id="homeHead">
@@ -216,27 +234,26 @@
   <div id="bar">
     <button id="bBack">← Mapas</button>
     <span id="mapTitle"></span>
-    <button class="ed" id="bToggleAdd" title="Ocultar / mostrar os botões + Filho e + Irmão (os atalhos Tab e Enter continuam funcionando)">⊖</button>
-    <button class="pri ed addBtn" id="bAdd" title="Tab">+ Filho</button>
-    <button class="ed addBtn" id="bSib" title="Enter">+ Irmão</button>
-    <button class="ed" id="bRename" title="F2 ou duplo clique">Renomear</button>
-    <button class="ed" id="bIcon">Ícone</button>
-    <button id="bDetails" title="Notas e anexos do tópico">📎 Notas/Anexos</button>
-    <button class="ed" id="bDone" title="Espaço">✓ Feito</button>
-    <button class="ed" id="bLink" title="Ligar este tópico a outro (L)">🔗 Ligar</button>
-    <button class="ed" id="bDel" title="Delete">Apagar</button>
-    <div id="colors" class="ed"></div>
+    <span class="ed atalhoDica" title="Clique num tópico e use as teclas">Tab = filho · Enter = irmão</span>
+    <button class="ed ico" id="bRename" title="Renomear (F2 ou duplo clique)">✏️</button>
+    <button class="ed ico" id="bIcon" title="Ícone do tópico">😀</button>
+    <button class="ed ico" id="bCores" title="Cor do ramo">🎨</button>
+    <button class="ico" id="bDetails" title="Notas, fotos e anexos do tópico">📎</button>
+    <button class="ed ico" id="bDone" title="Marcar como feito (Espaço)">✓</button>
+    <button class="ed ico" id="bLink" title="Ligar este tópico a outro (L)">🔗</button>
+    <button class="ed ico" id="bDel" title="Apagar (Delete)">🗑️</button>
     <span style="flex:1"></span>
     <span class="cloud" id="cloudBar"></span>
     <button id="bLoginBar" class="hidden">🔒 Entrar</button>
-    <button class="ed" id="bLayout">Organizar</button>
-    <button id="bCenter">Centralizar</button>
-    <button id="bExport">Exportar ▾</button>
-    <button id="bHelp">?</button>
+    <button class="ed ico" id="bLayout" title="Organizar o mapa">🧩</button>
+    <button class="ico" id="bCenter" title="Centralizar">⤢</button>
+    <button id="bExport" title="Baixar como imagem ou PDF">⬇ Exportar</button>
+    <button class="ico" id="bHelp" title="Atalhos do teclado">?</button>
   </div>
   <div id="stage"><div id="world"><svg id="links"></svg></div></div>
 
   <div id="iconPop" class="pop hidden"></div>
+  <div id="colors" class="pop hidden"></div>
   <div id="exportPop" class="pop hidden">
     <button id="bPng">🖼️ Imagem (PNG)</button>
     <button id="bPdf">📄 PDF</button>
@@ -251,12 +268,14 @@
     <div id="atts"></div>
     <div class="attBtns ed">
       <button id="bAddLink">🔗 Adicionar link</button>
+      <button id="bAddFoto">📷 Foto</button>
       <button id="bAddFile">📁 Enviar arquivo</button>
     </div>
     <div class="hint" id="attHint"></div>
   </div>
 
   <div id="help" class="hidden">
+    <b style="color:var(--accent)">Novo tópico:</b> clique num tópico e aperte <b>Tab</b> (filho) ou <b>Enter</b> (irmão). No celular: botão <b>＋</b> embaixo<br>
     <b>Clique</b> num tópico para selecionar<br>
     <b>Renomear</b>, <b>F2</b> ou <b>duplo clique</b> muda o texto<br>
     <b>Tab</b> novo filho · <b>Enter</b> novo irmão · <b>Delete</b> apagar<br>
@@ -274,6 +293,7 @@
 
 <input type="file" id="file" accept=".json,application/json">
 <input type="file" id="attFile">
+<input type="file" id="attFoto" accept="image/*">
 <div id="toast"></div>
 
 <script>
@@ -367,23 +387,29 @@ async function removeMapCloud(id){
 async function login(){
   const s=prompt('Senha para editar:');if(!s)return;
   const old=SENHA;SENHA=s;
-  try{await api('POST','?acao=login');localStorage.setItem(PASSKEY,s);CAN_EDIT=true;lastErr='';toast('Pronto! Agora você pode editar');
+  try{await api('POST','?acao=login');localStorage.setItem(PASSKEY,s);
+    // as seções (Missão, Gestão, Notion, Lean) só vêm com a senha: busca tudo de novo ANTES de liberar a edição,
+    // senão salvar uma seção que ainda não chegou gravaria uma vazia por cima da verdadeira
+    const j=await api('GET');DB.maps=j.maps||[];REV=j.rev;persistLocal();
+    CAN_EDIT=true;lastErr='';toast('Pronto! Agora você pode editar');
     offerUpload();
   }catch(e){SENHA=old;toast(e.message)}
   setStatus();route();
 }
-function logout(silent){SENHA='';localStorage.removeItem(PASSKEY);CAN_EDIT=false;setStatus();if(!silent)route()}
+function logout(silent){SENHA='';localStorage.removeItem(PASSKEY);CAN_EDIT=false;
+  // seções e contas não ficam neste aparelho depois de sair
+  DB.maps=DB.maps.filter(m=>!isSec(m));if(typeof CONTAS!=='undefined')CONTAS=null;persistLocal();setStatus();if(!silent)route()}
 $('bLoginHome').onclick=login;$('bLoginBar').onclick=login;$('bLoginHub').onclick=login;$('bLoginSec').onclick=login;$('bLogoutHome').onclick=()=>logout();
 
 async function boot(){
   // 1) tenta a nuvem (só existe no site publicado com o banco configurado)
   try{
-    const r=await fetch('/api/mapas',{cache:'no-store'});const j=await r.json();
+    const r=await fetch('/api/mapas',{cache:'no-store',headers:SENHA?{'x-senha':SENHA}:{}});const j=await r.json();
     if(r.ok&&j.banco){CLOUD=j;REV=j.rev;DB.maps=j.maps||[];}
   }catch(e){}
   if(CLOUD){
     CAN_EDIT=false;
-    if(SENHA){try{await api('POST','?acao=login');CAN_EDIT=true}catch(e){SENHA='';localStorage.removeItem(PASSKEY)}}
+    if(SENHA){try{await api('POST','?acao=login');CAN_EDIT=!!CLOUD.secoes||(await api('GET').then(j=>{DB.maps=j.maps||[];REV=j.rev;return true}))}catch(e){SENHA='';localStorage.removeItem(PASSKEY);DB.maps=DB.maps.filter(m=>!isSec(m))}}
     persistLocal();setInterval(poll,6000);
     setTimeout(offerUpload,500);
   }else{
@@ -448,14 +474,14 @@ function showHome(){
   document.title='Mapas Mentais · Produtividade';
   const g=$('grid');g.innerHTML='';const lista=DB.maps.filter(m=>!isSec(m));
   if(!lista.length)g.innerHTML='<div class="empty">Nenhum mapa ainda.'+(CAN_EDIT?' Crie o primeiro acima.':'')+'</div>';
-  // agrupa por "Grupo / Subgrupo"; os mapas sem grupo ficam no fim, em "Outros mapas"
+  // agrupa por "Grupo / Subgrupo"; os mapas sem grupo ficam no fim, em "Campo" (mapas dos projetos do app Campo)
   const chave=m=>(m.grupo||'').split('/').map(s=>s.trim()).filter(Boolean).join(' / ');
   const grupos=[...new Set(lista.map(chave))].sort((a,b)=>(!a)-(!b)||a.localeCompare(b,'pt-BR'));
   let grupoPai=null;
   grupos.forEach(gk=>{
     const partes=gk?gk.split(' / '):[];
     if(grupos.length>1||gk){
-      if(partes[0]!==grupoPai){grupoPai=partes[0]||null;const h=document.createElement('h2');h.className='grupo-h';h.textContent=partes[0]||'Outros mapas';g.appendChild(h)}
+      if(partes[0]!==grupoPai){grupoPai=partes[0]||null;const h=document.createElement('h2');h.className='grupo-h';h.textContent=partes[0]||'Campo';g.appendChild(h)}
       if(partes.length>1){const h2=document.createElement('h3');h2.className='grupo-sub';h2.textContent=partes.slice(1).join(' › ');g.appendChild(h2)}
     }
     lista.filter(m=>chave(m)===gk).sort((a,b)=>b.updated-a.updated).forEach(m=>cardMapa(m,g));
@@ -472,7 +498,7 @@ function cardMapa(m,g){
       const a=e.target.dataset&&e.target.dataset.a;
       if(a==='ren'){e.stopPropagation();const nn=prompt('Novo nome do mapa:',m.name);if(nn&&nn.trim()){setMapName(m,nn.trim());m.updated=Date.now();queueSave(m);showHome()}}
       else if(a==='grp'){e.stopPropagation();const ex=[...new Set(DB.maps.filter(x=>!isSec(x)&&x.grupo).map(x=>x.grupo))];
-        const ng=prompt('Grupo do mapa. Use " / " para subgrupo (ex.: Incorporação Imobiliária / Financiamento). Deixe vazio para tirar do grupo.'+(ex.length?'\n\nGrupos que já existem:\n• '+ex.join('\n• '):''),m.grupo||'');
+        const ng=prompt('Grupo do mapa. Use " / " para subgrupo (ex.: Incorporação Imobiliária / Financiamento). Deixe vazio para ir para o grupo Campo (mapas dos projetos do app Campo).'+(ex.length?'\n\nGrupos que já existem:\n• '+ex.join('\n• '):''),m.grupo||'');
         if(ng!==null){const v=ng.split('/').map(s=>s.trim()).filter(Boolean).join(' / ');if(v)m.grupo=v;else delete m.grupo;m.updated=Date.now();queueSave(m);showHome()}}
       else if(a==='dup'){e.stopPropagation();const c2=JSON.parse(JSON.stringify(plain(m)));c2.id=uid();setMapName(c2,m.name+' (cópia)');c2.updated=Date.now();DB.maps.push(c2);queueSave(c2);showHome()}
       else if(a==='del'){e.stopPropagation();if(confirm(`Apagar o mapa "${m.name}"? Isso não pode ser desfeito.`)){DB.maps=DB.maps.filter(x=>x!==m);clearTimeout(pending.get(m.id));pending.delete(m.id);persistLocal();removeMapCloud(m.id);showHome()}}
@@ -579,7 +605,7 @@ function render(doSave=true){
 
 // anexo que é foto (pelo nome ou pelo endereço) aparece dentro do tópico
 const IMG_RE=/\.(jpe?g|png|gif|webp|avif|bmp|svg)$/i;
-const isImage=a=>!!(a&&a.url&&(IMG_RE.test(a.nome||'')||IMG_RE.test(a.url.split(/[?#]/)[0])));
+const isImage=a=>!!(a&&a.url&&(a.tipo==='foto'||IMG_RE.test(a.nome||'')||IMG_RE.test(a.url.split(/[?#]/)[0])));
 function select(id){S.sel=id;render(false);refreshPanel()}
 function addChild(){
   if(!CAN_EDIT)return;
@@ -725,14 +751,8 @@ document.addEventListener('keydown',e=>{
 
 // ---------- barra ----------
 $('bBack').onclick=()=>{location.hash='#/mapas'};
-$('bAdd').onclick=addChild;$('bSib').onclick=addSibling;$('bDel').onclick=del;
+$('bDel').onclick=del;
 $('bLink').onclick=()=>linkFrom!==null?cancelLink():startLink();
-// ocultar temporariamente os botões "+ Filho" e "+ Irmão" (lembrado neste navegador)
-function setNoAdd(on){document.body.classList.toggle('noAdd',on);$('bToggleAdd').textContent=on?'⊕':'⊖';
-  $('bToggleAdd').title=on?'Mostrar os botões + Filho e + Irmão':'Ocultar os botões + Filho e + Irmão (os atalhos Tab e Enter continuam funcionando)';
-  try{localStorage.setItem('mapas-ocultar-add',on?'1':'')}catch(e){}}
-setNoAdd(localStorage.getItem('mapas-ocultar-add')==='1');
-$('bToggleAdd').onclick=()=>setNoAdd(!document.body.classList.contains('noAdd'));
 $('bRename').onclick=()=>S.sel?rename(S.sel):toast('Clique num tópico e depois em Renomear');
 $('bDone').onclick=()=>{const n=byId(S.sel);if(n){n.done=!n.done;render()}else toast('Selecione um tópico')};
 $('bLayout').onclick=()=>{layoutNodes(S.nodes);render()};
@@ -740,7 +760,8 @@ $('bCenter').onclick=()=>{center();applyView();saveView()};
 $('bHelp').onclick=()=>$('help').classList.toggle('hidden');
 $('bHideHelp').onclick=()=>$('help').classList.add('hidden');
 PALETTE.forEach(c=>{const s=document.createElement('span');s.style.background=c;s.title='Cor do ramo';
-  s.onclick=()=>{const n=byId(S.sel);if(n){n.color=c;render()}else toast('Selecione um tópico')};$('colors').appendChild(s)});
+  s.onclick=()=>{const n=byId(S.sel);if(n){n.color=c;render()}else toast('Selecione um tópico');closePops()};$('colors').appendChild(s)});
+$('bCores').onclick=e=>{if(!S.sel)return toast('Selecione um tópico');e.stopPropagation();openPop($('colors'),$('bCores'))};
 window.addEventListener('resize',applyView);
 
 // ---------- menus suspensos ----------
@@ -752,7 +773,7 @@ ICONS.forEach(ic=>{const s=document.createElement('span');s.textContent=ic;s.onc
 {const b=document.createElement('button');b.textContent='Remover ícone';b.onclick=()=>{const n=byId(S.sel);if(n){delete n.icon;render();refreshPanel()}closePops()};$('iconPop').appendChild(b)}
 $('bIcon').onclick=e=>{if(!S.sel)return toast('Selecione um tópico');e.stopPropagation();openPop($('iconPop'),$('bIcon'))};
 $('bExport').onclick=e=>{e.stopPropagation();openPop($('exportPop'),$('bExport'))};
-document.addEventListener('click',e=>{if(!e.target.closest('.pop')&&!e.target.closest('#bIcon,#bExport'))closePops()});
+document.addEventListener('click',e=>{if(!e.target.closest('.pop')&&!e.target.closest('#bIcon,#bExport,#bCores'))closePops()});
 
 // ---------- painel de notas e anexos ----------
 function openPanel(){if(!S.sel)return toast('Selecione um tópico');$('panel').classList.remove('hidden');refreshPanel()}
@@ -767,11 +788,11 @@ function refreshPanel(){
   $('noteView').textContent=n.note||'(sem notas)';$('noteView').classList.toggle('hidden',CAN_EDIT);
   const list=$('atts');list.innerHTML='';
   (n.atts||[]).forEach((a,i)=>{const d=document.createElement('div');d.className='att';
-    d.innerHTML=`<span>${a.tipo==='arquivo'?'📁':'🔗'}</span><a href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.nome||a.url)}</a>`+(CAN_EDIT?'<button title="Remover">✕</button>':'');
+    d.innerHTML=`<span>${a.tipo==='foto'?'📷':a.tipo==='arquivo'?'📁':'🔗'}</span><a href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.nome||a.url)}</a>`+(CAN_EDIT?'<button title="Remover">✕</button>':'');
     const b=d.querySelector('button');if(b)b.onclick=()=>{n.atts.splice(i,1);render();refreshPanel()};list.appendChild(d)});
   if(!(n.atts||[]).length)list.innerHTML='<div class="hint">Nenhum anexo.</div>';
   const canFile=CLOUD&&CLOUD.anexos&&CAN_EDIT;
-  $('bAddFile').disabled=!canFile;
+  $('bAddFile').disabled=!canFile;$('bAddFoto').disabled=!canFile;
   $('attHint').textContent=!CAN_EDIT?'':!CLOUD?'Envio de arquivos funciona no site publicado com a nuvem ligada. Links funcionam sempre.':!CLOUD.anexos?'Para enviar arquivos, ligue o armazenamento Blob na Vercel.':'Arquivos de até 4 MB.';
 }
 let noteT;
@@ -781,13 +802,26 @@ $('bAddLink').onclick=()=>{const n=byId(S.sel);if(!n)return;
   const nome=prompt('Nome do link (opcional):',url.replace(/^https?:\/\/(www\.)?/,'').slice(0,60))||url;
   (n.atts=n.atts||[]).push({tipo:'link',nome,url});render();refreshPanel()};
 $('bAddFile').onclick=()=>$('attFile').click();
+$('bAddFoto').onclick=()=>$('attFoto').click();
+// foto: reduz para 1600 px em JPEG antes de subir (a do celular costuma passar de 4 MB e não aparecia)
+async function reduzirFoto(f){
+  if(!/^image\//.test(f.type)||/svg|gif/.test(f.type))return f;
+  const url=URL.createObjectURL(f);
+  try{const img=await new Promise((ok,er)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=er;i.src=url});
+    const k=Math.min(1,1600/Math.max(img.naturalWidth,img.naturalHeight));const c=document.createElement('canvas');
+    c.width=Math.round(img.naturalWidth*k);c.height=Math.round(img.naturalHeight*k);c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+    const b=await new Promise(ok=>c.toBlob(ok,'image/jpeg',.82));if(!b)return f;
+    return new File([b],(f.name||'foto').replace(/\.[^.]+$/,'')+'.jpg',{type:'image/jpeg'})}
+  catch(e){return f}finally{URL.revokeObjectURL(url)}}
+$('attFoto').onchange=e=>$('attFile').onchange(e);
 $('attFile').onchange=async e=>{
-  const f=e.target.files[0];e.target.value='';const n=byId(S.sel);if(!f||!n)return;
+  let f=e.target.files[0];e.target.value='';const n=byId(S.sel);if(!f||!n)return;
+  if(/^image\//.test(f.type))f=await reduzirFoto(f);
   if(f.size>4*1024*1024)return toast('Arquivo maior que 4 MB');
   toast('Enviando '+f.name+'…');
   try{const r=await fetch('/api/anexo',{method:'POST',headers:{'x-senha':SENHA,'x-nome':encodeURIComponent(f.name),'x-tipo':f.type||'','Content-Type':'application/octet-stream'},body:f});
     const j=await r.json();if(!r.ok)throw new Error(j.erro||r.status);
-    (n.atts=n.atts||[]).push({tipo:'arquivo',nome:f.name,url:j.url});render();refreshPanel();toast('Arquivo anexado')}
+    (n.atts=n.atts||[]).push({tipo:/^image\//.test(f.type)?'foto':'arquivo',nome:f.name,url:j.url});render();refreshPanel();toast(/^image\//.test(f.type)?'Foto anexada: aparece no tópico e no PDF':'Arquivo anexado')}
   catch(err){toast('Falhou: '+err.message)}
 };
 
@@ -798,6 +832,11 @@ async function snapshot(jpeg){
   const prevSel=S.sel;S.sel=null;render(false);
   // espera as fotos dos tópicos carregarem antes de medir e fotografar o mapa
   await Promise.all([...world.querySelectorAll('img.thumb')].map(i=>i.complete?0:new Promise(r=>{i.onload=i.onerror=r})));
+  // embute cada foto no próprio mapa (data URL) para ela sair no PNG/PDF mesmo vinda de outro endereço
+  await Promise.all([...world.querySelectorAll('img.thumb')].map(async i=>{if(i.src.startsWith('data:'))return;
+    try{const b=await (await fetch(i.src,{mode:'cors',cache:'force-cache'})).blob();
+      const d=await new Promise(ok=>{const r=new FileReader();r.onload=()=>ok(r.result);r.readAsDataURL(b)});
+      await new Promise(ok=>{i.onload=i.onerror=ok;i.src=d})}catch(e){}}));
   const els=[...world.querySelectorAll('.node')];
   let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
   els.forEach(el=>{const w=el.offsetWidth,h=el.offsetHeight,x=parseFloat(el.style.left),y=parseFloat(el.style.top);
@@ -822,5 +861,6 @@ $('bPdf').onclick=async()=>{closePops();toast('Gerando PDF…');
 
 </script>
 <script src="produtividade.js"></script>
+<script src="mapa-mobile.js"></script>
 </body>
 </html>

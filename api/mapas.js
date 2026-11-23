@@ -1,6 +1,7 @@
 import { redis, temBanco, temSenha, temAnexos, senhaOk } from './_lib.js';
 
-// GET    /api/mapas[?rev=N]      -> lista os mapas (leitura é pública)
+// GET    /api/mapas[?rev=N]      -> lista os mapas (leitura pública). As seções (id "sec-": Missão, Gestão de
+//                                  Atividades, Notion, Lean) só vêm com a senha certa no x-senha.
 // POST   /api/mapas?acao=login   -> confere a senha
 // PUT    /api/mapas              -> salva um mapa  { map }      (precisa senha)
 // DELETE /api/mapas?id=ID        -> apaga um mapa              (precisa senha)
@@ -14,9 +15,12 @@ export default async function handler(req, res) {
       const rev = String((await redis('GET', 'mapas:rev')) || 0);
       if (req.query.rev && req.query.rev === rev) return res.json({ ...status, rev, mudou: false });
       const flat = (await redis('HGETALL', 'mapas')) || [];
-      const maps = [];
-      for (let i = 0; i < flat.length; i += 2) { try { maps.push(JSON.parse(flat[i + 1])); } catch {} }
-      return res.json({ ...status, rev, mudou: true, maps });
+      const comSenha = senhaOk(req), maps = [];
+      for (let i = 0; i < flat.length; i += 2) {
+        if (!comSenha && String(flat[i]).startsWith('sec-')) continue;   // seções: só para quem tem a senha
+        try { maps.push(JSON.parse(flat[i + 1])); } catch {}
+      }
+      return res.json({ ...status, rev, mudou: true, maps, secoes: comSenha });
     }
 
     if (!senhaOk(req)) {
