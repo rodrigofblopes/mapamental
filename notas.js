@@ -12,7 +12,8 @@ const dmy = (d) => (d ? d.split('-').reverse().join('/') : '');
 
 // ---------- nuvem ----------
 async function nApi(metodo, qs = '', corpo, cab = {}) {
-  const h = { 'x-senha': SENHA, ...cab }; let body = corpo;
+  const h = { ...cab }; let body = corpo; if (SENHA) h['x-senha'] = SENHA;
+  if (!CAN_EDIT && (qs === '?acao=foto' || (metodo === 'PUT' && corpo && corpo.nota))) h['x-rapida'] = '1';   // lançar não pede senha
   if (corpo !== undefined && !(corpo instanceof Blob)) { h['Content-Type'] = 'application/json'; body = JSON.stringify(corpo); }
   const r = await fetch('/api/notas' + qs, { method: metodo, headers: h, body, cache: 'no-store' });
   const j = await r.json().catch(() => ({}));
@@ -25,15 +26,19 @@ async function carregarNotas() {
     NCFG = { centros: N_CENTROS, categorias: N_CATS, empresas: N_EMPRESAS, ...(j.cfg || {}) };
     ['centros', 'categorias', 'empresas'].forEach((k) => { if (!NCFG[k] || !NCFG[k].length) NCFG[k] = { centros: N_CENTROS, categorias: N_CATS, empresas: N_EMPRESAS }[k]; });
     notasErro = ''; await lerPend(); enviarPend();
-  } catch (e) { notasErro = e.message; }
+  } catch (e) { notasErro = e.message; if (e.status === 401 && typeof notasSaiu === 'function') notasSaiu(); }
   if (location.hash === '#/s/notas' || location.hash === '#/s/meta') rerenderNotas(); else if (!CUR && (location.hash === '' || location.hash === '#/')) showHub();
 }
 const rerenderNotas = () => { const a = document.activeElement; if (a && ['INPUT', 'TEXTAREA', 'SELECT'].includes(a.tagName) && $('sec').contains(a) && a.id !== 'nBusca') return; if (location.hash === '#/s/notas') showSec('notas'); else if (location.hash === '#/s/meta') showSec('meta'); };
 const salvarCfg = () => nApi('PUT', '', { cfg: NCFG }).catch((e) => toast('Não salvou a lista: ' + e.message));
 async function salvarNota(n) {
-  const j = await nApi('PUT', '', { nota: n }); const i = NOTAS.findIndex((x) => x.id === n.id);
+  const j = await nApi('PUT', '', { nota: n }); guardarRecente(n); if (!NOTAS || !j.nota) return n; const i = NOTAS.findIndex((x) => x.id === n.id);
   if (i >= 0) NOTAS[i] = j.nota; else NOTAS.push(j.nota); return j.nota;
 }
+// as últimas lançadas por este aparelho (para conferir sem precisar da senha)
+const lerRecentes = () => { try { return JSON.parse(localStorage.getItem('notas-recentes')) || []; } catch { return []; } };
+function guardarRecente(n) { try { localStorage.setItem('notas-recentes', JSON.stringify([{ id: n.id, data: n.data, fornecedor: n.fornecedor, desc: n.desc, valor: n.valor, pagoPor: n.pagoPor, centro: n.centro }, ...lerRecentes().filter((x) => x.id !== n.id)].slice(0, 8))); } catch {} }
+const cfgPadrao = () => (NCFG = NCFG || { centros: [...N_CENTROS], categorias: [...N_CATS], empresas: [...N_EMPRESAS] });
 async function enviarFoto(blob) { return (await nApi('POST', '?acao=foto', new Blob([blob], { type: 'application/octet-stream' }), { 'x-tipo': blob.type, 'Content-Type': 'application/octet-stream' })).foto; }
 const FOTOS_ABERTAS = new Map();
 async function urlFoto(id) {
@@ -48,7 +53,7 @@ async function nFila(modo, fn) { const b = await nBanco(); return new Promise((o
 async function lerPend() { try { NPEND = (await nFila('readonly', (s) => s.getAll())) || []; } catch { NPEND = []; } }
 let enviando = false;
 async function enviarPend() {
-  if (enviando || !NPEND.length || !CAN_EDIT || !navigator.onLine) return; enviando = true; let n = 0;
+  if (enviando || !NPEND.length || !navigator.onLine) return; enviando = true; let n = 0;
   for (const p of [...NPEND]) {
     try {
       while (p.novas.length) { const f = await enviarFoto(p.novas[0]); p.nota.fotos.push(f); p.novas.shift(); await nFila('readwrite', (s) => s.put(p)); }
@@ -75,13 +80,27 @@ function abrirNotaDaMissao(i) { const n = notaDaMissao(i.id); notaNova = n ? { .
 
 // ---------- tela ----------
 function renderNotas(b) {
-  if (!CAN_EDIT) { b.append(el('div', { class: 'empty' }, '🔒 As notas são só para quem tem a senha. '), el('button', { class: 'pri', onclick: () => login() }, 'Entrar com a senha')); return; }
-  if (!NOTAS) { b.append(el('div', { class: 'empty' }, notasErro ? '⚠️ ' + notasErro : 'Carregando as notas…')); if (!notasErro) carregarNotas(); else b.append(el('button', { onclick: () => { notasErro = ''; carregarNotas(); rerenderNotas(); } }, 'Tentar de novo')); return; }
+  if (!CAN_EDIT) return renderRapida(b);
+  if (!NOTAS) { botoesFoto(b); avisoPend(b); b.append(el('div', { class: 'empty' }, notasErro ? '⚠️ ' + notasErro : 'Carregando as notas…')); if (!notasErro) carregarNotas(); else b.append(el('button', { onclick: () => { notasErro = ''; carregarNotas(); rerenderNotas(); } }, 'Tentar de novo')); return; }
   if (notaNova) { const n = notaNova; notaNova = null; setTimeout(() => formNota(n), 30); }
   const abas = [['lista', '🧾 Notas'], ['reembolso', '💸 Reembolso']];
-  b.append(el('div', { class: 'nTopo' }, el('button', { class: 'pri nFoto', onclick: () => formNota({ nova: true }) }, '📷 Nova nota'), el('div', { class: 'nAbas' }, ...abas.map(([k, n]) => el('button', { class: k === notasAba ? 'on' : '', onclick: () => { notasAba = k; showSec('notas'); } }, n)))));
-  if (NPEND.length) b.append(el('div', { class: 'aviso' }, el('span', {}, `📵 ${NPEND.length} nota(s) guardada(s) neste aparelho, esperando internet.`), el('button', { onclick: () => enviarPend() }, 'Enviar agora')));
+  botoesFoto(b); b.append(el('div', { class: 'nTopo' }, el('div', { class: 'nAbas' }, ...abas.map(([k, n]) => el('button', { class: k === notasAba ? 'on' : '', onclick: () => { notasAba = k; showSec('notas'); } }, n)))));
+  avisoPend(b);
   ({ lista: abaLista, reembolso: abaReembolso })[notasAba](b);
+}
+// um toque e já abre a câmera
+function botoesFoto(b) {
+  const cam = el('input', { type: 'file', accept: 'image/*', capture: 'environment' }), gal = el('input', { type: 'file', accept: 'image/*,application/pdf', multiple: true });
+  cam.onchange = () => { const a = [...cam.files]; cam.value = ''; if (a.length) formNota({ nova: true }, a); }; gal.onchange = () => { const a = [...gal.files]; gal.value = ''; if (a.length) formNota({ nova: true }, a); };
+  b.append(el('div', { class: 'nRapida' }, el('button', { class: 'pri nGrande', onclick: () => cam.click() }, '📷 Tirar foto da nota'), el('div', { class: 'nAcoes' }, el('button', { onclick: () => gal.click() }, '🖼️ Galeria ou PDF'), el('button', { onclick: () => formNota({ nova: true }) }, '✍️ Sem foto')), cam, gal));
+}
+function avisoPend(b) { if (NPEND.length) b.append(el('div', { class: 'aviso' }, el('span', {}, `📵 ${NPEND.length} nota(s) guardada(s) neste aparelho, esperando internet.`), el('button', { onclick: () => enviarPend() }, 'Enviar agora'))); }
+// sem senha: lança na hora; para ver tudo, pedir reembolso ou mudar, entra uma vez neste aparelho
+function renderRapida(b) {
+  cfgPadrao(); if (notaNova) { const n = notaNova; notaNova = null; setTimeout(() => formNota(n), 30); }
+  botoesFoto(b); avisoPend(b); if (!renderRapida.leu) { renderRapida.leu = true; lerPend().then(() => { if (NPEND.length) { enviarPend(); rerenderNotas(); } }); }
+  const l = lerRecentes(); if (l.length) b.append(el('h4', {}, 'Últimas deste aparelho'), ...l.map((n) => el('div', { class: 'item nLinha' }, el('span', { class: 'nIc' }, '🧾'), el('span', { class: 'txt' }, el('b', {}, n.fornecedor || n.desc || 'Nota'), el('small', {}, [ddmm(n.data), n.centro, n.pagoPor === 'meu' ? 'meu bolso' : 'empresa pagou'].filter(Boolean).join(' · '))), el('b', { class: 'valor' }, BRL(n.valor)))));
+  b.append(el('div', { class: 'nAcoes', style: 'margin-top:18px' }, el('button', { onclick: () => login() }, '🔒 Ver todas e pedir reembolso'), el('small', {}, 'Pede a senha uma vez só neste aparelho.')));
 }
 const kpi = (t, v, c) => el('div', { class: 'kpi ' + (c || '') }, el('small', {}, t), el('b', {}, v));
 function navMes(b) {
@@ -169,7 +188,7 @@ async function enviarPdf(l, e, pedir) {
   if (!foi) arqs.forEach((a) => baixar(a, a.name));
   if (pedir && confirm(foi ? 'Enviou? Marcar estas notas como pedidas?' : 'O PDF foi baixado. Marcar estas notas como pedidas?')) await marcar(l, 'pedidoEm');
 }
-function novoNaLista(k) { const v = (prompt('Nome:') || '').trim(); if (!v || NCFG[k].includes(v)) return null; NCFG[k] = [...NCFG[k], v]; salvarCfg(); if (!$('nForm')) showSec('notas'); return v; }
+function novoNaLista(k) { const v = (prompt('Nome:') || '').trim(); if (!v || NCFG[k].includes(v)) return null; NCFG[k] = [...NCFG[k], v]; if (CAN_EDIT) salvarCfg(); if (!$('nForm')) showSec('notas'); return v; }
 const baixar = (blob, nome) => { const a = el('a', { href: URL.createObjectURL(blob), download: nome }); document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); };
 function csv(l) { const q = (s) => '"' + String(s ?? '').replace(/"/g, '""').replace(/^([=+\-@])/, "'$1") + '"'; const c = ['Data', 'Fornecedor', 'CNPJ', 'Número', 'O que é', 'Categoria', 'Obra', 'Valor', 'Quem pagou', 'Forma', 'Empresa', 'Situação', 'Pedido em', 'Recebido em', 'Observação']; baixar(new Blob(['﻿' + [c, ...[...l].sort((x, y) => x.data.localeCompare(y.data)).map((n) => [dmy(n.data), n.fornecedor, n.cnpj, n.numero, n.desc, n.categoria, n.centro, String(n.valor).replace('.', ','), n.pagoPor === 'meu' ? 'Meu dinheiro' : 'Empresa', n.forma, n.empresa, SIT[situacao(n)][0], dmy(n.pedidoEm), dmy(n.recebidoEm), n.obs])].map((r) => r.map(q).join(';')).join('\r\n')], { type: 'text/csv;charset=utf-8' }), `notas-${notasMes}.csv`); }
 async function backup() {
@@ -179,29 +198,34 @@ async function backup() {
 }
 
 // ---------- formulário ----------
-function formNota(n0) {
-  const nova = !NOTAS.some((x) => x.id === n0.id) && !NPEND.some((x) => x.id === n0.id), ult = [...NOTAS].sort((x, y) => y.criado - x.criado)[0] || {};
+const ultimaEscolha = () => { try { return JSON.parse(localStorage.getItem('notas-ultima')) || {}; } catch { return {}; } };
+function formNota(n0, arquivos) {
+  cfgPadrao(); const nova = !(NOTAS || []).some((x) => x.id === n0.id) && !NPEND.some((x) => x.id === n0.id), ult = [...(NOTAS || [])].sort((x, y) => y.criado - x.criado)[0] || ultimaEscolha();
   const pend = NPEND.find((p) => p.id === n0.id);
   const n = { id: novoId(), data: hojeIso(), fornecedor: '', cnpj: '', numero: '', chave: '', desc: '', valor: '', categoria: 'Material', centro: ult.centro || NCFG.centros[0], pagoPor: 'meu', forma: ult.forma || 'Pix', empresa: ult.empresa || NCFG.empresas[0], obs: '', missao: '', criado: Date.now(), ...n0, fotos: [...(n0.fotos || [])] };
   delete n.nova; delete n.pendente; const novas = pend ? [...pend.novas] : [];
   const fundo = el('div', { id: 'nForm', class: 'nFundo' }), cx = el('div', { class: 'nCaixa', role: 'dialog', 'aria-label': 'Nota' }); fundo.append(cx); document.body.append(fundo);
   const fechar = () => { fundo.remove(); removeEventListener('keydown', esc2); }, esc2 = (e) => { if (e.key === 'Escape' && !$('nScan')) fechar(); }; addEventListener('keydown', esc2);
-  const inp = (k, rot, at = {}) => { const i = el('input', { value: n[k] ?? '', ...at, oninput: (e) => { n[k] = e.target.value; } }); return el('label', {}, el('span', {}, rot), i); };
+  const inp = (k, rot, at = {}) => { const i = el('input', { 'data-k': k, value: n[k] ?? '', ...at, oninput: (e) => { n[k] = e.target.value; tocados.add(k); } }); return el('label', {}, el('span', {}, rot), i); };
   const sel = (k, rot, lista, cfgk) => { const s = el('select', { onchange: (e) => { if (e.target.value === '+') { const v = novoNaLista(cfgk); if (v) { n[k] = v; } desenha(); return; } n[k] = e.target.value; } }, ...[...new Set([...lista, n[k]].filter(Boolean))].map((x) => el('option', { value: x, selected: x === n[k] }, x)), cfgk ? el('option', { value: '+' }, '+ Novo…') : null); return el('label', {}, el('span', {}, rot), s); };
   const cam = el('input', { type: 'file', accept: 'image/*', capture: 'environment' }), gal = el('input', { type: 'file', accept: 'image/*,application/pdf', multiple: true });
-  const receber = async (arqs) => { for (const f of arqs) { if (f.type === 'application/pdf') { if (f.size > 4 * 1024 * 1024) { toast('PDF maior que 4 MB'); continue; } novas.push(new Blob([await f.arrayBuffer()], { type: 'application/pdf' })); } else { const r = await scanner(f); if (r) { novas.push(r); lerQr(r); } } } desenha(); };
+  const receber = async (arqs) => { let lida = null; for (const f of arqs) { if (f.type === 'application/pdf') { if (f.size > 4 * 1024 * 1024) { toast('PDF maior que 4 MB'); continue; } novas.push(new Blob([await f.arrayBuffer()], { type: 'application/pdf' })); } else { const r = await scanner(f); if (r) { novas.push(r); lida = lida || r; } } } desenha(); if (lida && nova) ler(lida, true); };
   cam.onchange = () => { const a = [...cam.files]; cam.value = ''; receber(a); }; gal.onchange = () => { const a = [...gal.files]; gal.value = ''; receber(a); };
-  let lendo = '', maisAberto = false;
-  const lerQr = async (blob) => { try { const q = await qrDaNota(blob); if (q) { Object.assign(n, Object.fromEntries(Object.entries(q).filter(([, v]) => v))); toast('Li o QR Code da nota'); desenha(); } } catch {} };
-  const ler = async () => {
-    const b = novas.find((x) => x.type !== 'application/pdf') || (n.fotos.find((f) => f.tipo !== 'application/pdf') && await (await fetch(await urlFoto(n.fotos.find((f) => f.tipo !== 'application/pdf').id))).blob()); if (!b) return toast('Tire a foto primeiro');
-    lendo = 'Lendo a nota… (na primeira vez demora um pouco)'; desenha();
-    try { const r = await ocrNota(b, (p) => { lendo = `Lendo a nota… ${Math.round(p * 100)}%`; const e = cx.querySelector('.nLendo'); if (e) e.textContent = lendo; }); let k = 0; for (const c of ['valor', 'cnpj', 'data', 'fornecedor', 'numero']) if (r[c] && (!n[c] || c === 'valor' || (c === 'data' && nova))) { n[c] = r[c]; k++; } toast(k ? `Preenchi ${k} campo(s). Confira antes de salvar.` : 'Não consegui ler. Preencha à mão.'); }
-    catch (e) { toast('Não consegui ler: ' + e.message); } lendo = ''; desenha();
+  let lendo = '', maisAberto = false; const tocados = new Set();
+  // preenche só o que a pessoa não mexeu, sem redesenhar (não atrapalha quem está digitando)
+  const aplica = (o) => { let q = 0; for (const [k, v] of Object.entries(o || {})) { if (!v || tocados.has(k) || (k !== 'data' && k !== 'chave' && n[k])) continue; n[k] = v; q++; const i = cx.querySelector(`[data-k="${k}"]`); if (i) i.value = k === 'valor' ? v.toFixed(2).replace('.', ',') : v; } return q; };
+  const avisa = (s) => { lendo = s; const e = cx.querySelector('.nLendo'); if (e) e.textContent = s; };
+  let ocupado = false;
+  const ler = async (b, auto) => {
+    if (ocupado) return; b = b || novas.find((x) => x.type !== 'application/pdf') || (n.fotos.find((f) => f.tipo !== 'application/pdf') && await (await fetch(await urlFoto(n.fotos.find((f) => f.tipo !== 'application/pdf').id))).blob()); if (!b) return toast('Tire a foto primeiro');
+    ocupado = true; avisa('🔎 Lendo a nota… pode ir preenchendo'); let q = 0;
+    try { q += aplica(await ocrNota(b, (p) => avisa(`🔎 Lendo a nota… ${Math.round(p * 100)}%`))); } catch (e) { if (!auto) toast('Não consegui ler: ' + e.message); }
+    ocupado = false; avisa(q ? '✓ Preenchi o que consegui ler. Confira antes de salvar.' : auto && !navigator.onLine ? '' : 'Não consegui ler. Preencha à mão.');
   };
   async function salvar(bt) {
     const v = typeof n.valor === 'number' ? n.valor : lerValor(n.valor); if (v == null || v <= 0) { toast('Falta o valor'); cx.querySelector('[data-valor]').focus(); return; }
     if (!n.data) return toast('Falta a data'); if (!n.fornecedor.trim() && !n.desc.trim()) return toast('Diga o fornecedor ou o que é');
+    try { localStorage.setItem('notas-ultima', JSON.stringify({ centro: n.centro, empresa: n.empresa, forma: n.forma })); } catch {}
     n.valor = v; if (n.pagoPor === 'empresa') { n.pedidoEm = ''; n.recebidoEm = ''; } bt.disabled = true; bt.textContent = 'Salvando…';
     const p = { id: n.id, nota: { ...n, fotos: [...n.fotos] }, novas: [...novas] };
     try { await nFila('readwrite', (s) => s.put(p)); } catch {}
@@ -211,7 +235,7 @@ function formNota(n0) {
     if (n.missao) { const it = itens('meta').find((x) => x.id === n.missao); if (it && !it.done && confirm(`Marcar "${it.text}" como feita na Missão?`)) { it.done = true; it.feito = Date.now(); salvarSec('meta'); } }
     showSec('notas');
   }
-  async function apagarNota() { if (!confirm('Apagar esta nota e as fotos dela? Não dá para desfazer.')) return; try { if (pend) await nFila('readwrite', (s) => s.delete(n.id)); if (NOTAS.some((x) => x.id === n.id)) { await nApi('DELETE', '?id=' + encodeURIComponent(n.id)); NOTAS = NOTAS.filter((x) => x.id !== n.id); } await lerPend(); fechar(); showSec('notas'); toast('Nota apagada'); } catch (e) { toast(e.message); } }
+  async function apagarNota() { if (!confirm('Apagar esta nota e as fotos dela? Não dá para desfazer.')) return; try { if (pend) await nFila('readwrite', (s) => s.delete(n.id)); if ((NOTAS || []).some((x) => x.id === n.id)) { await nApi('DELETE', '?id=' + encodeURIComponent(n.id)); NOTAS = NOTAS.filter((x) => x.id !== n.id); } await lerPend(); fechar(); showSec('notas'); toast('Nota apagada'); } catch (e) { toast(e.message); } }
   function miniaturas() {
     const z = el('div', { class: 'nMinis' });
     n.fotos.forEach((f) => { const m = el('div', { class: 'nMini' }, f.tipo === 'application/pdf' ? '📄' : '…', el('button', { title: 'Tirar', 'aria-label': 'Tirar foto', onclick: (e) => { e.stopPropagation(); if (confirm('Tirar esta foto da nota?')) { n.fotos = n.fotos.filter((x) => x !== f); desenha(); } } }, '✕')); m.onclick = async () => { try { verFoto(await urlFoto(f.id), f.tipo); } catch (e) { toast(e.message); } }; if (f.tipo !== 'application/pdf') urlFoto(f.id).then((u) => { m.style.backgroundImage = `url(${u})`; m.firstChild.textContent = ''; }).catch(() => { m.firstChild.textContent = '⚠️'; }); z.append(m); });
@@ -220,10 +244,10 @@ function formNota(n0) {
   }
   function desenha() {
     const meu = n.pagoPor === 'meu', rolou = cx.scrollTop;
-    const vin = el('input', { 'data-valor': '1', inputmode: 'decimal', placeholder: '0,00', value: typeof n.valor === 'number' && n.valor ? String(n.valor.toFixed(2)).replace('.', ',') : n.valor || '', oninput: (e) => { n.valor = e.target.value; } });
+    const vin = el('input', { 'data-valor': '1', 'data-k': 'valor', inputmode: 'decimal', placeholder: '0,00', value: typeof n.valor === 'number' && n.valor ? String(n.valor.toFixed(2)).replace('.', ',') : n.valor || '', oninput: (e) => { n.valor = e.target.value; tocados.add('valor'); } });
     const bt = el('button', { class: 'pri', onclick: () => salvar(bt) }, 'Salvar');
     cx.replaceChildren(...[el('div', { class: 'nCab' }, el('h3', {}, nova ? 'Nova nota' : 'Nota'), el('button', { onclick: fechar, 'aria-label': 'Fechar' }, '✕')),
-      el('div', { class: 'nFotos' }, el('button', { class: 'pri', onclick: () => cam.click() }, '📷 Tirar foto'), el('button', { onclick: () => gal.click() }, '🖼️ Galeria ou PDF'), novas.length || n.fotos.length ? el('button', { onclick: ler, disabled: !!lendo }, '🔎 Ler a nota') : null, cam, gal), miniaturas(), lendo ? el('div', { class: 'nLendo' }, lendo) : null,
+      el('div', { class: 'nFotos' }, el('button', { class: 'pri', onclick: () => cam.click() }, '📷 Tirar foto'), el('button', { onclick: () => gal.click() }, '🖼️ Galeria ou PDF'), novas.length || n.fotos.length ? el('button', { onclick: () => ler() }, '🔎 Ler de novo') : null, cam, gal), miniaturas(), el('div', { class: 'nLendo', role: 'status' }, lendo),
       el('div', { class: 'nQuem' }, el('button', { class: meu ? 'on' : '', onclick: () => { n.pagoPor = 'meu'; desenha(); } }, '👛 Paguei do meu bolso'), el('button', { class: meu ? '' : 'on', onclick: () => { n.pagoPor = 'empresa'; desenha(); } }, '🏢 A empresa pagou')),
       el('div', { class: 'nCampos' }, el('label', {}, el('span', {}, 'Valor (R$)'), vin), inp('data', 'Data da nota', { type: 'date' }), inp('fornecedor', 'Onde comprei', { maxlength: 200 }), inp('desc', 'O que é', { maxlength: 400, placeholder: 'Ex.: parafusos para a platibanda' }), sel('centro', 'Obra', NCFG.centros, 'centros'), sel('empresa', meu ? 'Quem vai me pagar' : 'Qual empresa pagou', NCFG.empresas, 'empresas')),
       el('details', { class: 'nMais', open: maisAberto, ontoggle: (e) => { maisAberto = e.target.open; } }, el('summary', {}, 'Mais detalhes'), el('div', { class: 'nCampos' }, sel('forma', 'Como paguei', N_FORMAS), sel('categoria', 'Tipo', NCFG.categorias, 'categorias'), inp('cnpj', 'CNPJ do fornecedor', { maxlength: 20, inputmode: 'numeric' }), inp('numero', 'Número da nota', { maxlength: 30 }),
@@ -232,7 +256,7 @@ function formNota(n0) {
       el('div', { class: 'nRodape' }, nova ? el('span', {}) : el('button', { class: 'nApagar', onclick: apagarNota }, 'Apagar'), el('span', {}, el('button', { onclick: fechar }, 'Cancelar'), ' ', bt))].filter(Boolean));
     cx.scrollTop = rolou;
   }
-  desenha();
+  desenha(); if (arquivos && arquivos.length) receber(arquivos);
 }
 function verFoto(u, tipo) { if (tipo === 'application/pdf') { window.open(u, '_blank', 'noopener'); return; } const v = el('div', { class: 'nVer', onclick: () => v.remove() }, el('img', { src: u, alt: 'Nota' }), el('button', { 'aria-label': 'Fechar' }, '✕')); document.body.append(v); }
 

@@ -6,7 +6,7 @@ const SECOES = {
   meta:   { nome: 'Missão',             sub: 'Tarefas do dia: marque o que foi feito.',               icone: '🎯', cor: '#d9534f' },
   trello: { nome: 'Gestão de Atividades da Obra', sub: 'Só as atividades da obra que está no Campo (Amaggi). Arraste os cartões entre as colunas.', icone: '📋', cor: '#5b9bd5' },
   contas: { nome: 'Contas Mensais', sub: 'Contas do mês, o que já foi pago e o custo fixo mensal do CNPJ. Só aparece para quem entrou com a senha.', icone: '💳', cor: '#4fb3a9' },
-  notas:  { nome: 'Notas e Reembolso', sub: 'Foto da nota, quem pagou e o PDF para pedir o reembolso. Só aparece para quem entrou com a senha.', icone: '🧾', cor: '#e0b84a' },
+  notas:  { nome: 'Notas e Reembolso', sub: 'Foto da nota, quem pagou e o PDF para pedir o reembolso. Lançar não pede senha; ver as notas pede uma vez.', icone: '🧾', cor: '#e0b84a' },
   notion: { nome: 'Central de Organização', sub: 'Páginas de anotações, estilo Notion.',              icone: '🗂️', cor: '#a678c9' },
   lean:   { nome: 'Lean Construction',  sub: 'Materiais, PDFs e links de Lean Construction.',          icone: '🏗️', cor: '#6aa84f' },
 };
@@ -48,7 +48,7 @@ function showHub() {
     ['#/s/lean', SECOES.lean.icone, SECOES.lean.nome, `${lean.length} material(is)`, SECOES.lean.cor],
   ].map((c, i) => (i > 0 && fechado() ? [c[0], c[1], c[2], '🔒 Entre com a senha para ver', c[4]] : c)).concat([
     ['#/s/contas', SECOES.contas.icone, SECOES.contas.nome, CAN_EDIT ? resumoContasHub() : '🔒 Entre com a senha para ver', SECOES.contas.cor],
-    ['#/s/notas', SECOES.notas.icone, SECOES.notas.nome, CAN_EDIT ? resumoNotasHub() : '🔒 Entre com a senha para ver', SECOES.notas.cor],
+    ['#/s/notas', SECOES.notas.icone, SECOES.notas.nome, CAN_EDIT ? resumoNotasHub() : '📷 Tirar foto e lançar, sem senha', SECOES.notas.cor],
   ]);
   const g = $('hubGrid'); g.innerHTML = '';
   cards.forEach(([href, ic, nome, meta, cor]) => {
@@ -63,7 +63,7 @@ function showSec(key) {
   const s = SECOES[key]; document.title = s.nome + ' · Produtividade';
   $('secTitle').textContent = s.icone + ' ' + s.nome; $('secSub').textContent = s.sub;
   const b = $('secBody'); b.innerHTML = ''; b.className = 'sec-' + key;
-  if (fechado()) { b.append(el('div', { class: 'empty' }, '🔒 Esta parte é só para quem tem a senha.'), el('button', { class: 'pri', onclick: () => login() }, 'Entrar com a senha')); return; }
+  if (fechado() && key !== 'notas') { b.append(el('div', { class: 'empty' }, '🔒 Esta parte é só para quem tem a senha.'), el('button', { class: 'pri', onclick: () => login() }, 'Entrar com a senha')); return; }
   ({ meta: renderMeta, trello: renderTrello, notion: renderNotion, lean: renderLean, contas: renderContas, notas: renderNotas })[key](b);
 }
 const rerender = (key) => { if (location.hash === '#/s/' + key) showSec(key); };

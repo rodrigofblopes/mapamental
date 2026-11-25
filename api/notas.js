@@ -8,6 +8,7 @@ import { redis, temBanco, temAnexos, senhaOk } from './_lib.js';
 // POST   /api/notas?acao=foto       -> guarda uma foto ou PDF (corpo = arquivo; x-tipo)  -> { foto }
 // PUT    /api/notas { nota }        -> salva uma nota          PUT { cfg } -> centros de custo, categorias, empresas
 // DELETE /api/notas?id=ID           -> apaga a nota e as fotos dela
+// Lançamento rápido (x-rapida: 1), SEM senha: só guarda foto e cria nota NOVA. Não lê, não muda e não apaga nada.
 // Redis: hash "notas" (id -> nota), "notas:cfg", hash "notas:fotos" (foto -> onde está + chave).
 // A foto vai cifrada (AES-256-GCM, uma chave por arquivo) para o Blob, que tem endereço público: sem a chave,
 // guardada só no banco, o arquivo não abre. Sem Blob, a foto fica no próprio banco.
@@ -38,7 +39,7 @@ export function limparNota(n) {
     desc: t(n.desc, 400), valor: num(n.valor), categoria: t(n.categoria, 60), centro: t(n.centro, 80), pagoPor: n.pagoPor === 'empresa' ? 'empresa' : 'meu', forma: t(n.forma, 40),
     empresa: t(n.empresa, 80), pedidoEm: data(n.pedidoEm), recebidoEm: data(n.recebidoEm), obs: t(n.obs, 800), missao: t(n.missao, 40),
     fotos: (Array.isArray(n.fotos) ? n.fotos : []).slice(0, 8).map((f) => ({ id: t(f.id, 60), tipo: t(f.tipo, 40) })).filter((f) => f.id),
-    criado: Number(n.criado) || Date.now(), atualizado: Date.now(),
+    criado: Number(n.criado) || Date.now(), atualizado: Date.now(), ...(n.rapida ? { rapida: true } : {}),
   };
 }
 async function apagarFoto(id) {
@@ -53,8 +54,17 @@ export default async function handler(req, res) {
   try {
     // 12 senhas erradas em 15 minutos, do mesmo lugar: espera
     const ip = t(String(req.headers['x-forwarded-for'] || '').split(',')[0], 60) || 'local', trava = 'notas:erros:' + ip;
-    if (Number(await redis('GET', trava)) >= 12) return res.status(429).json({ erro: 'Muitas senhas erradas. Tente em 15 minutos.' });
-    if (!senhaOk(req)) {
+    const podeRapida = req.headers['x-rapida'] === '1' && ((req.method === 'POST' && req.query.acao === 'foto') || (req.method === 'PUT' && req.body && req.body.nota && !req.body.cfg));
+    const travado = Number(await redis('GET', trava)) >= 12;
+    if (travado && !podeRapida) return res.status(429).json({ erro: 'Muitas senhas erradas. Tente em 15 minutos.' });
+    let rapida = false;
+    if (podeRapida && (travado || !senhaOk(req))) {
+      rapida = true;   // limites para ninguém encher o banco: 60 envios por hora do mesmo lugar, 400 por dia no total
+      const kh = 'notas:rap:' + ip, kd = 'notas:rapdia:' + new Date().toISOString().slice(0, 10);
+      const h = await redis('INCR', kh); if (Number(h) === 1) await redis('EXPIRE', kh, '3600');
+      const g = await redis('INCR', kd); if (Number(g) === 1) await redis('EXPIRE', kd, '172800');
+      if (Number(h) > 60 || Number(g) > 400) return res.status(429).json({ erro: 'Muitos envios seguidos. Tente mais tarde.' });
+    } else if (!senhaOk(req)) {
       if (req.headers['x-senha']) { await redis('INCR', trava); await redis('EXPIRE', trava, '900'); }
       return res.status(401).json({ erro: 'Entre com a senha para ver as notas' });
     }
@@ -92,6 +102,13 @@ export default async function handler(req, res) {
       }
       const n = b.nota && limparNota(b.nota); if (!n || !n.id || !n.data) return res.status(400).json({ erro: 'Nota sem data' });
       const antes = await redis('HGET', 'notas', n.id);
+      if (rapida) {
+        if (antes) { const a = JSON.parse(antes); if (a.valor === n.valor && a.data === n.data && a.fornecedor === n.fornecedor) return res.json({ ok: true }); return res.status(401).json({ erro: 'Para mudar uma nota, entre com a senha' }); }
+        Object.assign(n, { pedidoEm: '', recebidoEm: '', rapida: true });
+        for (const f of n.fotos) if (!(await redis('HGET', 'notas:fotos', f.id))) return res.status(400).json({ erro: 'Foto não encontrada' });
+        await redis('HSET', 'notas', n.id, JSON.stringify(n));
+        return res.json({ ok: true });
+      }
       if (antes) { const ids = n.fotos.map((f) => f.id); for (const f of JSON.parse(antes).fotos || []) if (!ids.includes(f.id)) await apagarFoto(f.id); }
       await redis('HSET', 'notas', n.id, JSON.stringify(n));
       return res.json({ ok: true, nota: n });
