@@ -6,6 +6,7 @@ const SECOES = {
   meta:   { nome: 'Missão',             sub: 'Tarefas do dia: marque o que foi feito.',               icone: '🎯', cor: '#d9534f' },
   trello: { nome: 'Gestão de Atividades da Obra', sub: 'Só as atividades da obra que está no Campo (Amaggi). Arraste os cartões entre as colunas.', icone: '📋', cor: '#5b9bd5' },
   contas: { nome: 'Contas Mensais', sub: 'Contas do mês, o que já foi pago e o custo fixo mensal do CNPJ. Só aparece para quem entrou com a senha.', icone: '💳', cor: '#4fb3a9' },
+  notas:  { nome: 'Notas e Reembolso', sub: 'Foto da nota, quem pagou e o PDF para pedir o reembolso. Só aparece para quem entrou com a senha.', icone: '🧾', cor: '#e0b84a' },
   notion: { nome: 'Central de Organização', sub: 'Páginas de anotações, estilo Notion.',              icone: '🗂️', cor: '#a678c9' },
   lean:   { nome: 'Lean Construction',  sub: 'Materiais, PDFs e links de Lean Construction.',          icone: '🏗️', cor: '#6aa84f' },
 };
@@ -47,6 +48,7 @@ function showHub() {
     ['#/s/lean', SECOES.lean.icone, SECOES.lean.nome, `${lean.length} material(is)`, SECOES.lean.cor],
   ].map((c, i) => (i > 0 && fechado() ? [c[0], c[1], c[2], '🔒 Entre com a senha para ver', c[4]] : c)).concat([
     ['#/s/contas', SECOES.contas.icone, SECOES.contas.nome, CAN_EDIT ? resumoContasHub() : '🔒 Entre com a senha para ver', SECOES.contas.cor],
+    ['#/s/notas', SECOES.notas.icone, SECOES.notas.nome, CAN_EDIT ? resumoNotasHub() : '🔒 Entre com a senha para ver', SECOES.notas.cor],
   ]);
   const g = $('hubGrid'); g.innerHTML = '';
   cards.forEach(([href, ic, nome, meta, cor]) => {
@@ -62,7 +64,7 @@ function showSec(key) {
   $('secTitle').textContent = s.icone + ' ' + s.nome; $('secSub').textContent = s.sub;
   const b = $('secBody'); b.innerHTML = ''; b.className = 'sec-' + key;
   if (fechado()) { b.append(el('div', { class: 'empty' }, '🔒 Esta parte é só para quem tem a senha.'), el('button', { class: 'pri', onclick: () => login() }, 'Entrar com a senha')); return; }
-  ({ meta: renderMeta, trello: renderTrello, notion: renderNotion, lean: renderLean, contas: renderContas })[key](b);
+  ({ meta: renderMeta, trello: renderTrello, notion: renderNotion, lean: renderLean, contas: renderContas, notas: renderNotas })[key](b);
 }
 const rerender = (key) => { if (location.hash === '#/s/' + key) showSec(key); };
 
@@ -75,13 +77,14 @@ function campoNovo(placeholder, aoCriar) {
 
 // Missão (antiga Meta Diária): lista com caixinhas
 function renderMeta(b) {
-  const lista = itens('meta');
+  const lista = itens('meta'); if (CAN_EDIT && CLOUD && !NOTAS && !notasErro) carregarNotas();
   b.append(campoNovo('Nova meta (ex.: Comprar parafusos em PVH)', (t) => { secDoc('meta', true).nodes.unshift({ id: novoId(), text: t, done: false, criado: Date.now() }); salvarSec('meta'); rerender('meta'); setTimeout(() => $('secBody').querySelector('input').focus()); }));
   const pend = lista.filter((i) => !i.done), feitas = lista.filter((i) => i.done);
   const linha = (i) => el('div', { class: 'item' + (i.done ? ' done' : '') },
     el('input', { type: 'checkbox', checked: i.done, disabled: !CAN_EDIT, onchange: () => { i.done = !i.done; i.feito = i.done ? Date.now() : null; salvarSec('meta'); rerender('meta'); } }),
     el('span', { class: 'txt', ondblclick: () => editarTexto(i, 'meta') }, i.text),
     el('span', { class: 'quando' }, new Date(i.criado || Date.now()).toLocaleDateString('pt-BR')),
+    CLOUD ? el('button', { class: 'ed nMissao' + (notaDaMissao(i.id) ? ' tem' : ''), title: notaDaMissao(i.id) ? 'Abrir a nota desta compra' : 'Guardar a nota desta compra', onclick: () => abrirNotaDaMissao(i) }, notaDaMissao(i.id) ? '🧾 ' + BRL(notaDaMissao(i.id).valor) : '🧾') : null,
     el('button', { class: 'ed x', title: 'Apagar', onclick: () => apagar('meta', i) }, '✕'));
   b.append(el('h4', {}, `Pendentes (${pend.length})`), ...(pend.length ? pend.map(linha) : [el('div', { class: 'empty' }, 'Nada pendente. 🎉')]));
   if (feitas.length) b.append(el('h4', {}, `Feitas (${feitas.length})`, el('button', { class: 'ed mini', onclick: () => { if (!pedeEdicao() || !confirm('Apagar as ' + feitas.length + ' metas feitas?')) return; secDoc('meta').nodes = pend; salvarSec('meta'); rerender('meta'); } }, 'Limpar feitas')), ...feitas.map(linha));
