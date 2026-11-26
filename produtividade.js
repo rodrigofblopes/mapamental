@@ -127,7 +127,9 @@ function renderTrello(b) {
     const coluna = el('div', { class: 'coluna', ondragover: (e) => { e.preventDefault(); coluna.classList.add('alvo'); }, ondragleave: () => coluna.classList.remove('alvo'),
       ondrop: (e) => { e.preventDefault(); const i = itens('trello').find((x) => x.id === e.dataTransfer.getData('text/plain')); if (i) mover(i, col); } },
       el('h4', {}, `${nome} (${cards.length})`));
-    cards.forEach((i) => coluna.append(el('div', { class: 'cartao', draggable: CAN_EDIT ? 'true' : 'false', ondragstart: (e) => e.dataTransfer.setData('text/plain', i.id) },
+    cards.forEach((i) => coluna.append(el('div', { class: 'cartao', draggable: CAN_EDIT ? 'true' : 'false', ondragstart: (e) => e.dataTransfer.setData('text/plain', i.id),
+      // no texto o cartão não arrasta, para dar para selecionar e copiar a frase; arrasta pela borda do cartão
+      onpointerdown: (e) => { if (CAN_EDIT) e.currentTarget.draggable = !e.target.closest('.txt'); } },
       el('div', { class: 'txt', ondblclick: (e) => editarNaLinha(e.currentTarget, i, 'trello') }, i.text),
       el('div', { class: 'acoes ed' },
         ci > 0 ? el('button', { title: 'Voltar coluna', onclick: () => mover(i, COLUNAS[ci - 1][0]) }, '◀') : null,
