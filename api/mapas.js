@@ -36,9 +36,11 @@ export default async function handler(req, res) {
       if (m.grupo) limpo.grupo = String(m.grupo).slice(0, 200);   // grupo / subgrupo do mapa (ex.: "Incorporação Imobiliária / Financiamento")
       // Seções (Missão, Gestão, Notion, Lean): junta em vez de substituir. Um aparelho com a lista velha não apaga
       // o que outro aparelho acabou de pôr; só sai o que este aparelho apagou de verdade (req.body.apagados).
-      if (limpo.id.startsWith('sec-') && Array.isArray(req.body.apagados)) {
+      // 26/11/2026: sem a lista "apagados" (script velho, outro programa) a seção NUNCA perde cartão: só junta.
+      if (limpo.id.startsWith('sec-')) {
+        const apagadosPedidos = Array.isArray(req.body.apagados) ? req.body.apagados : [];
         let antes = []; try { antes = (JSON.parse((await redis('HGET', 'mapas', limpo.id)) || 'null') || {}).nodes || []; } catch {}
-        const tem = new Set(limpo.nodes.map((n) => n && n.id).filter(Boolean)), fora = new Set(req.body.apagados.map(String));
+        const tem = new Set(limpo.nodes.map((n) => n && n.id).filter(Boolean)), fora = new Set(apagadosPedidos.map(String));
         antes.forEach((n, i) => { if (n && n.id && !tem.has(n.id) && !fora.has(String(n.id))) { limpo.nodes.splice(Math.min(i, limpo.nodes.length), 0, n); tem.add(n.id); } });
       }
       await redis('HSET', 'mapas', limpo.id, JSON.stringify(limpo));
