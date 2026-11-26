@@ -51,10 +51,14 @@ function showHub() {
     ['#/s/notas', SECOES.notas.icone, SECOES.notas.nome, CAN_EDIT ? resumoNotasHub() : '📷 Tirar foto e lançar, sem senha', SECOES.notas.cor],
   ]);
   const g = $('hubGrid'); g.innerHTML = '';
-  cards.forEach(([href, ic, nome, meta, cor]) => {
-    const c = el('a', { class: 'card hubCard', href }, el('div', { class: 'hubIc' }, ic), el('h3', {}, nome), el('div', { class: 'meta' }, meta));
-    c.style.setProperty('--c', cor); g.append(c);
+  const cartao = ([href, ic, nome, meta, cor]) => { const c = el('a', { class: 'card hubCard', href }, el('div', { class: 'hubIc' }, ic), el('h3', {}, nome), el('div', { class: 'meta' }, meta)); c.style.setProperty('--c', cor); return c; };
+  const HREF = { meta: '#/s/meta', trello: '#/s/trello', notas: '#/s/notas', mapas: '#/mapas', notion: '#/s/notion' }, usados = new Set();
+  GRUPOS.forEach((gr) => {
+    g.append(el('div', { class: 'hubGrupo' }, el('h2', {}, gr.icone + ' ' + gr.nome), el('small', {}, gr.sub)));
+    gr.abas.forEach((k) => { const c = cards.find((x) => x[0] === HREF[k]); if (c) { usados.add(c); g.append(cartao(c)); } });
   });
+  const resto = cards.filter((c) => !usados.has(c));
+  if (resto.length) { g.append(el('div', { class: 'hubGrupo' }, el('h2', {}, '📦 Outras ferramentas'))); resto.forEach((c) => g.append(cartao(c))); }
 }
 
 // ---------- seções ----------
@@ -64,15 +68,30 @@ function showSec(key) {
   $('secTitle').textContent = s.icone + ' ' + s.nome; $('secSub').textContent = s.sub;
   const b = $('secBody'); b.innerHTML = ''; b.className = 'sec-' + key;
   if (fechado() && key !== 'notas') { b.append(el('div', { class: 'empty' }, '🔒 Esta parte é só para quem tem a senha.'), el('button', { class: 'pri', onclick: () => login() }, 'Entrar com a senha')); return; }
-  if (['meta', 'trello', 'notas'].includes(key)) b.append(ponte(key));
+  if (GRUPOS.some((g) => g.abas.includes(key))) b.append(ponte(key));
   ({ meta: renderMeta, trello: renderTrello, notion: renderNotion, lean: renderLean, contas: renderContas, notas: renderNotas })[key](b);
 }
 const rerender = (key) => { if (location.hash === '#/s/' + key) showSec(key); };
 // atalhos no topo de Missão, Gestão e Notas: só leva de uma aba para a outra
+// Dois grupos de ferramentas ligadas; dentro de cada um, os atalhos no topo levam de uma aba para a outra.
+const GRUPOS = [
+  { id: 'obra', nome: 'Rotina da Obra', icone: '🔧', sub: 'Compras, atividades e notas da obra, lado a lado.', abas: ['meta', 'trello', 'notas'] },
+  { id: 'ideias', nome: 'Ideias e Anotações', icone: '💡', sub: 'Mapas mentais e páginas de anotação, lado a lado.', abas: ['mapas', 'notion'] },
+];
+function abaInfo(k) {
+  const meta = itens('meta'), tre = itens('trello').filter(daObra), nNotas = typeof NOTAS !== 'undefined' && NOTAS ? todasNotas().length : null, nMapas = DB.maps.filter((m) => !isSec(m)).length;
+  return {
+    meta: ['#/s/meta', '🎯 Missão', `${meta.filter((i) => !i.done).length} a comprar`],
+    trello: ['#/s/trello', '📋 Gestão', `${tre.filter((i) => i.col !== 'feito').length} em aberto`],
+    notas: ['#/s/notas', '🧾 Notas', nNotas == null ? '' : `${nNotas} nota(s)`],
+    mapas: ['#/mapas', '🧠 Mapa mental', `${nMapas} mapa(s)`],
+    notion: ['#/s/notion', '🗂️ Notion', `${itens('notion').length} página(s)`],
+  }[k];
+}
 function ponte(atual) {
-  const meta = itens('meta'), tre = itens('trello').filter(daObra), nNotas = typeof NOTAS !== 'undefined' && NOTAS ? todasNotas().length : null;
-  const abas = [['meta', '🎯 Missão', `${meta.filter((i) => !i.done).length} a comprar`], ['trello', '📋 Gestão', `${tre.filter((i) => i.col !== 'feito').length} em aberto`], ['notas', '🧾 Notas', nNotas == null ? '' : `${nNotas} nota(s)`]];
-  return el('nav', { class: 'ponte' }, ...abas.map(([k, n, s]) => el('a', { class: k === atual ? 'on' : '', href: '#/s/' + k }, el('b', {}, n), s ? el('small', {}, s) : null)));
+  const g = GRUPOS.find((x) => x.abas.includes(atual)); if (!g) return null;
+  return el('nav', { class: 'ponte', 'aria-label': g.nome }, el('span', { class: 'ponteNome' }, g.icone + ' ' + g.nome),
+    ...g.abas.map((k) => { const [href, n, s] = abaInfo(k); return el('a', { class: k === atual ? 'on' : '', href }, el('b', {}, n), s ? el('small', {}, s) : null); }));
 }
 
 function campoNovo(placeholder, aoCriar) {
