@@ -12,7 +12,7 @@ const SECOES = {
 };
 const COLUNAS = [['fazer', 'A fazer'], ['fazendo', 'Fazendo'], ['feito', 'Feito']];
 const OBRA_ATUAL = 'Amaggi';   // obra que está no app Campo; cartão sem obra = de antes (financiamento, marketing, site)
-const daObra = () => true;   // mostra todos os cartões (os antigos não tinham obra marcada)
+const daObra = (i) => !!i.obra;   // Gestão mostra só os cartões da obra; os antigos do mapa mental (sem obra) ficam guardados, escondidos
 
 const isSec = (m) => String(m.id).startsWith('sec-');
 function secDoc(key, criar) {
