@@ -92,7 +92,8 @@ function renderNotas(b) {
 function botoesFoto(b) {
   const cam = el('input', { type: 'file', accept: 'image/*', capture: 'environment' }), gal = el('input', { type: 'file', accept: 'image/*,application/pdf', multiple: true });
   cam.onchange = () => { const a = [...cam.files]; cam.value = ''; if (a.length) formNota({ nova: true }, a); }; gal.onchange = () => { const a = [...gal.files]; gal.value = ''; if (a.length) formNota({ nova: true }, a); };
-  b.append(el('div', { class: 'nRapida' }, el('button', { class: 'pri nGrande', onclick: () => cam.click() }, '📷 Tirar foto da nota'), el('div', { class: 'nAcoes' }, el('button', { onclick: () => gal.click() }, '🖼️ Galeria ou PDF'), el('button', { onclick: () => formNota({ nova: true }) }, '✍️ Sem foto')), cam, gal));
+  const aoVivo = async () => { const c = await cameraAoVivo(() => cam.click()); if (c) formNota({ nova: true }, [c]); };
+  b.append(el('div', { class: 'nRapida' }, el('button', { class: 'pri nGrande', onclick: aoVivo }, '📷 Fotografar nota ou boleto'), el('div', { class: 'nAcoes' }, el('button', { onclick: () => cam.click() }, '📱 Câmera do celular'), el('button', { onclick: () => gal.click() }, '🖼️ Galeria ou PDF'), el('button', { onclick: () => formNota({ nova: true }) }, '✍️ Sem foto')), cam, gal));
 }
 function avisoPend(b) { if (NPEND.length) b.append(el('div', { class: 'aviso' }, el('span', {}, `📵 ${NPEND.length} nota(s) guardada(s) neste aparelho, esperando internet.`), el('button', { onclick: () => enviarPend() }, 'Enviar agora'))); }
 // sem senha: lança na hora; para ver tudo, pedir reembolso ou mudar, entra uma vez neste aparelho
@@ -209,16 +210,19 @@ function formNota(n0, arquivos) {
   const inp = (k, rot, at = {}) => { const i = el('input', { 'data-k': k, value: n[k] ?? '', ...at, oninput: (e) => { n[k] = e.target.value; tocados.add(k); } }); return el('label', {}, el('span', {}, rot), i); };
   const sel = (k, rot, lista, cfgk) => { const s = el('select', { onchange: (e) => { if (e.target.value === '+') { const v = novoNaLista(cfgk); if (v) { n[k] = v; } desenha(); return; } n[k] = e.target.value; } }, ...[...new Set([...lista, n[k]].filter(Boolean))].map((x) => el('option', { value: x, selected: x === n[k] }, x)), cfgk ? el('option', { value: '+' }, '+ Novo…') : null); return el('label', {}, el('span', {}, rot), s); };
   const cam = el('input', { type: 'file', accept: 'image/*', capture: 'environment' }), gal = el('input', { type: 'file', accept: 'image/*,application/pdf', multiple: true });
-  const receber = async (arqs) => { let lida = null; for (const f of arqs) { if (f.type === 'application/pdf') { if (f.size > 4 * 1024 * 1024) { toast('PDF maior que 4 MB'); continue; } novas.push(new Blob([await f.arrayBuffer()], { type: 'application/pdf' })); } else { const r = await scanner(f); if (r) { novas.push(r); lida = lida || r; } } } desenha(); if (lida && nova) ler(lida, true); };
+  const receber = async (arqs) => { let lida = null, codigos = null; for (const f of arqs) { if (f.type === 'application/pdf') { if (f.size > 4 * 1024 * 1024) { toast('PDF maior que 4 MB'); continue; } novas.push(new Blob([await f.arrayBuffer()], { type: 'application/pdf' })); } else { const cod = lerCodigos(f.canvas || f).catch(() => ({})); const r = await scanner(f.canvas ? null : f, f.canvas ? f : null); if (r) { novas.push(r); if (!lida) { lida = r; codigos = cod; } } } } desenha(); if (lida && nova) ler(lida, true, codigos); };
   cam.onchange = () => { const a = [...cam.files]; cam.value = ''; receber(a); }; gal.onchange = () => { const a = [...gal.files]; gal.value = ''; receber(a); };
   let lendo = '', maisAberto = false; const tocados = new Set();
   // preenche só o que a pessoa não mexeu, sem redesenhar (não atrapalha quem está digitando)
-  const aplica = (o) => { let q = 0; for (const [k, v] of Object.entries(o || {})) { if (!v || tocados.has(k) || (k !== 'data' && k !== 'chave' && n[k])) continue; n[k] = v; q++; const i = cx.querySelector(`[data-k="${k}"]`); if (i) i.value = k === 'valor' ? v.toFixed(2).replace('.', ',') : v; } return q; };
+  const aplica = (o) => { let q = 0; for (const [k, v] of Object.entries(o || {})) { if (!v || tocados.has(k) || (!['data', 'chave', 'linha', 'vencimento'].includes(k) && n[k])) continue; n[k] = v; q++; const i = cx.querySelector(`[data-k="${k}"]`); if (i) i.value = k === 'valor' ? v.toFixed(2).replace('.', ',') : v; } const bx = cx.querySelector('.nBoletoBox'); if (bx) bx.replaceChildren(...caixaBoleto()); return q; };
+  // boleto lido: banco, vencimento e a linha digitável para colar no app do banco
+  const caixaBoleto = () => !n.linha ? [] : [el('div', { class: 'nBoleto' }, el('span', {}, '🧾 Boleto' + (n.banco ? ' ' + n.banco : '') + (n.vencimento ? ' · vence ' + dmy(n.vencimento) : '')), el('code', {}, fmtLinha(n.linha)), el('button', { onclick: async () => { try { await navigator.clipboard.writeText(n.linha); toast('Linha copiada: cole no app do banco'); } catch { prompt('Copie a linha:', n.linha); } } }, '📋 Copiar'))];
   const avisa = (s) => { lendo = s; const e = cx.querySelector('.nLendo'); if (e) e.textContent = s; };
   let ocupado = false;
-  const ler = async (b, auto) => {
+  const ler = async (b, auto, codigos) => {
     if (ocupado) return; b = b || novas.find((x) => x.type !== 'application/pdf') || (n.fotos.find((f) => f.tipo !== 'application/pdf') && await (await fetch(await urlFoto(n.fotos.find((f) => f.tipo !== 'application/pdf').id))).blob()); if (!b) return toast('Tire a foto primeiro');
     ocupado = true; avisa('🔎 Lendo a nota… pode ir preenchendo'); let q = 0;
+    try { const c = await (codigos || lerCodigos(b)); const bol = c.barras && dadosDoBoleto(c.barras); if (bol) { q += aplica(bol); if (!n.desc && !tocados.has('desc')) q += aplica({ desc: 'Boleto' + (bol.banco ? ' ' + bol.banco : '') }); avisa('✓ Li o código de barras do boleto. Confira o valor.'); } const qr = c.qr && dadosDaChave(c.qr); if (qr) q += aplica(qr); if (bol) { ocupado = false; return; } } catch {}
     try { q += aplica(await ocrNota(b, (p) => avisa(`🔎 Lendo a nota… ${Math.round(p * 100)}%`))); } catch (e) { if (!auto) toast('Não consegui ler: ' + e.message); }
     ocupado = false; avisa(q ? '✓ Preenchi o que consegui ler. Confira antes de salvar.' : auto && !navigator.onLine ? '' : 'Não consegui ler. Preencha à mão.');
   };
@@ -247,7 +251,8 @@ function formNota(n0, arquivos) {
     const vin = el('input', { 'data-valor': '1', 'data-k': 'valor', inputmode: 'decimal', placeholder: '0,00', value: typeof n.valor === 'number' && n.valor ? String(n.valor.toFixed(2)).replace('.', ',') : n.valor || '', oninput: (e) => { n.valor = e.target.value; tocados.add('valor'); } });
     const bt = el('button', { class: 'pri', onclick: () => salvar(bt) }, 'Salvar');
     cx.replaceChildren(...[el('div', { class: 'nCab' }, el('h3', {}, nova ? 'Nova nota' : 'Nota'), el('button', { onclick: fechar, 'aria-label': 'Fechar' }, '✕')),
-      el('div', { class: 'nFotos' }, el('button', { class: 'pri', onclick: () => cam.click() }, '📷 Tirar foto'), el('button', { onclick: () => gal.click() }, '🖼️ Galeria ou PDF'), novas.length || n.fotos.length ? el('button', { onclick: () => ler() }, '🔎 Ler de novo') : null, cam, gal), miniaturas(), el('div', { class: 'nLendo', role: 'status' }, lendo),
+      el('div', { class: 'nFotos' }, el('button', { class: 'pri', onclick: async () => { const c = await cameraAoVivo(() => cam.click()); if (c) receber([c]); } }, '📷 Tirar foto'), el('button', { onclick: () => gal.click() }, '🖼️ Galeria ou PDF'), novas.length || n.fotos.length ? el('button', { onclick: () => ler() }, '🔎 Ler de novo') : null, cam, gal), miniaturas(), el('div', { class: 'nLendo', role: 'status' }, lendo),
+      el('div', { class: 'nBoletoBox' }, ...caixaBoleto()),
       el('div', { class: 'nQuem' }, el('button', { class: meu ? 'on' : '', onclick: () => { n.pagoPor = 'meu'; desenha(); } }, '👛 Paguei do meu bolso'), el('button', { class: meu ? '' : 'on', onclick: () => { n.pagoPor = 'empresa'; desenha(); } }, '🏢 A empresa pagou')),
       el('div', { class: 'nCampos' }, el('label', {}, el('span', {}, 'Valor (R$)'), vin), inp('data', 'Data da nota', { type: 'date' }), inp('fornecedor', 'Onde comprei', { maxlength: 200 }), inp('desc', 'O que é', { maxlength: 400, placeholder: 'Ex.: parafusos para a platibanda' }), sel('centro', 'Obra', NCFG.centros, 'centros'), sel('empresa', meu ? 'Quem vai me pagar' : 'Qual empresa pagou', NCFG.empresas, 'empresas')),
       el('details', { class: 'nMais', open: maisAberto, ontoggle: (e) => { maisAberto = e.target.open; } }, el('summary', {}, 'Mais detalhes'), el('div', { class: 'nCampos' }, sel('forma', 'Como paguei', N_FORMAS), sel('categoria', 'Tipo', NCFG.categorias, 'categorias'), inp('cnpj', 'CNPJ do fornecedor', { maxlength: 20, inputmode: 'numeric' }), inp('numero', 'Número da nota', { maxlength: 30 }),
@@ -272,7 +277,7 @@ function acharCantos(c) {
   const on = new Uint8Array(w * h); for (let i = 0; i < g.length; i++) on[i] = g[i] > th ? 1 : 0;
   const vis = new Int32Array(w * h); let id = 0, maior = null; const fila = new Int32Array(w * h);
   for (let i = 0; i < on.length; i++) if (on[i] && !vis[i]) { id++; let a = 0, f = 0; fila[f++] = i; vis[i] = id; while (a < f) { const k = fila[a++], cx = k % w, cy = (k / w) | 0; for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = cx + dx, ny = cy + dy, q = ny * w + nx; if (nx >= 0 && ny >= 0 && nx < w && ny < h && on[q] && !vis[q]) { vis[q] = id; fila[f++] = q; } } } if (!maior || f > maior.n) maior = { id, n: f }; }
-  const pad = [[.04, .04], [.96, .04], [.96, .96], [.04, .96]]; if (!maior || maior.n < w * h * .12 || maior.n > w * h * .97) return pad;
+  const pad = [[.04, .04], [.96, .04], [.96, .96], [.04, .96]]; pad.falhou = true; if (!maior || maior.n < w * h * .12 || maior.n > w * h * .97) return pad;
   let tl, tr, br, bl, a = 1e9, b2 = -1e9, c2 = -1e9, d2 = 1e9; for (let i = 0; i < vis.length; i++) if (vis[i] === maior.id) { const px = i % w, py = (i / w) | 0, m = px + py, n = px - py; if (m < a) { a = m; tl = [px, py]; } if (m > c2) { c2 = m; br = [px, py]; } if (n > b2) { b2 = n; tr = [px, py]; } if (n < d2) { d2 = n; bl = [px, py]; } }
   const k = [tl, tr, br, bl].map(([px, py]) => [px / (w - 1), py / (h - 1)]), area = Math.abs((k[2][0] - k[0][0]) * (k[3][1] - k[1][1]) - (k[3][0] - k[1][0]) * (k[2][1] - k[0][1])) / 2; return area > .12 ? k : pad;
 }
@@ -292,11 +297,11 @@ function recortar(c, k, filtro) {
   ox.putImageData(im, 0, 0); return o;
 }
 const paraJpeg = (c, q = .78) => new Promise((ok) => c.toBlob((b) => ok(b), 'image/jpeg', q));
-async function scanner(arq) {
-  let img; try { img = await imagem(arq); } catch (e) { toast(e.message); return null; }
-  const e = Math.min(1, 2200 / Math.max(img.width, img.height)), base0 = telaDe(Math.round(img.width * e), Math.round(img.height * e)); base0.getContext('2d').drawImage(img, 0, 0, base0.width, base0.height);
+async function scanner(arq, pre) {
+  let base0 = pre && pre.canvas;
+  if (!base0) { let img; try { img = await imagem(arq); } catch (e) { toast(e.message); return null; } const e = Math.min(1, 2200 / Math.max(img.width, img.height)); base0 = telaDe(Math.round(img.width * e), Math.round(img.height * e)); base0.getContext('2d').drawImage(img, 0, 0, base0.width, base0.height); }
   return new Promise((ok) => {
-    let base = base0, k = acharCantos(base), filtro = 'limpo', previa = false;
+    let base = base0, k = pre && pre.k ? pre.k.map((p) => [...p]) : acharCantos(base), filtro = 'limpo', previa = false;
     const fundo = el('div', { id: 'nScan', class: 'nFundo' }), cx = el('div', { class: 'nCaixa nScanCx' }), quadro = el('div', { class: 'nQuadro' }); fundo.append(cx); document.body.append(fundo);
     const fim = (v) => { fundo.remove(); ok(v); };
     const girar = () => { const c = telaDe(base.height, base.width), x = c.getContext('2d'); x.translate(c.width, 0); x.rotate(Math.PI / 2); x.drawImage(base, 0, 0); base = c; k = acharCantos(base); previa = false; pinta(); };
@@ -324,15 +329,56 @@ function dadosDaChave(txt) {
   const m = String(txt || '').replace(/\s/g, '').match(/\d{44}/); if (!m) return null; const c = m[0]; let s = 0, p = 2; for (let i = 42; i >= 0; i--) { s += c[i] * p; p = p === 9 ? 2 : p + 1; } const r = s % 11, dv = r < 2 ? 0 : 11 - r; if (dv !== +c[43] || !cnpjOk(c.slice(6, 20))) return null;
   return { chave: c, cnpj: fmtCnpj(c.slice(6, 20)), numero: String(+c.slice(25, 34)) };
 }
-async function qrDaNota(blob) {
-  const img = await imagem(blob); let txt = '';
-  if ('BarcodeDetector' in window) { try { const r = await new BarcodeDetector({ formats: ['qr_code'] }).detect(img); txt = r[0] ? r[0].rawValue : ''; } catch {} }
-  if (!txt) { await carregaJs('https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js'); for (const lado of [1100, 1700]) { const e = Math.min(1, lado / Math.max(img.width, img.height)), c = telaDe(Math.round(img.width * e), Math.round(img.height * e)), x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(img, 0, 0, c.width, c.height); const d = x.getImageData(0, 0, c.width, c.height), r = window.jsQR(d.data, c.width, c.height); if (r) { txt = r.data; break; } } }
-  return txt ? dadosDaChave(txt) : null;
+// Lê o QR Code da NFC-e e o código de barras do boleto (ITF, 44 números). Primeiro o leitor do próprio celular;
+// se ele não ler (iPhone), o ZBar (github.com/undecaf/zbar-wasm, LGPL), que baixa uma vez só.
+let ZBAR = null;
+async function lerCodigos(fonte) {
+  const img = fonte instanceof HTMLCanvasElement ? fonte : await imagem(fonte), out = {};
+  const pega = (tipo, v) => { v = String(v || ''); if (tipo === 'qr') { if (!out.qr && /\d{44}/.test(v.replace(/\s/g, ''))) out.qr = v; } else { const d = v.replace(/\D/g, ''); if (!out.barras && d.length === 44 && dadosDoBoleto(d)) out.barras = d; } };
+  if ('BarcodeDetector' in window) { try { const sup = await BarcodeDetector.getSupportedFormats(), f = ['qr_code', 'itf'].filter((x) => sup.includes(x)); if (f.length) for (const c of await new BarcodeDetector({ formats: f }).detect(img)) pega(c.format === 'qr_code' ? 'qr' : 'itf', c.rawValue); } catch {} }
+  if (out.qr || out.barras) return out;
+  try {
+    if (!ZBAR) ZBAR = await import('https://cdn.jsdelivr.net/npm/@undecaf/zbar-wasm@0.11.0/dist/inlined/index.mjs');
+    const W = img.naturalWidth || img.width, H = img.naturalHeight || img.height;
+    for (const lado of [2000, 1300]) {
+      const e = Math.min(1, lado / Math.max(W, H)), c = telaDe(Math.round(W * e), Math.round(H * e)), x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(img, 0, 0, c.width, c.height);
+      for (const s of await ZBAR.scanImageData(x.getImageData(0, 0, c.width, c.height))) pega(/QR/.test(s.typeName) ? 'qr' : 'itf', s.decode());
+      if (out.qr || out.barras) break;
+    }
+  } catch {}
+  return out;
 }
+async function qrDaNota(blob) { const c = await lerCodigos(blob); return c.qr ? dadosDaChave(c.qr) : null; }
+
+// Boleto: do código de barras (44) ou da linha digitável (47 bancário, 48 contas de consumo) tira valor e vencimento.
+const BANCOS = { '001': 'Banco do Brasil', '033': 'Santander', '041': 'Banrisul', '070': 'BRB', '077': 'Inter', '104': 'Caixa', '237': 'Bradesco', '260': 'Nubank', '290': 'PagBank', '323': 'Mercado Pago', '336': 'C6', '341': 'Itaú', '380': 'PicPay', '422': 'Safra', '748': 'Sicredi', '756': 'Sicoob' };
+const mod10 = (s) => { let t = 0, p = 2; for (let i = s.length - 1; i >= 0; i--) { let v = +s[i] * p; t += v > 9 ? v - 9 : v; p = p === 2 ? 1 : 2; } return (10 - (t % 10)) % 10; };
+const mod11 = (s, conta) => { let t = 0, p = 2; for (let i = s.length - 1; i >= 0; i--) { t += +s[i] * p; p = p === 9 ? 2 : p + 1; } const r = 11 - (t % 11); return conta ? (r === 10 || r === 11 ? 0 : r) : (r === 0 || r >= 10 ? 1 : r); };
+function paraBarras(d) {
+  d = String(d || '').replace(/\D/g, '');
+  if (d.length === 44) return d;
+  if (d.length === 47) { const b = d.slice(0, 4) + d[32] + d.slice(33, 47) + d.slice(4, 9) + d.slice(10, 20) + d.slice(21, 31); return [d.slice(0, 9), d.slice(10, 20), d.slice(21, 31)].every((c, i) => mod10(c) === +d[[9, 20, 31][i]]) ? b : null; }
+  if (d.length === 48) { const p = [0, 1, 2, 3].map((i) => d.slice(i * 12, i * 12 + 11)), dvs = [0, 1, 2, 3].map((i) => +d[i * 12 + 11]), b = p.join(''), m = +b[2] >= 8 ? (s) => mod11(s, 1) : mod10; return p.every((c, i) => m(c) === dvs[i]) ? b : null; }
+  return null;
+}
+function dadosDoBoleto(entrada) {
+  const b = paraBarras(entrada); if (!b) return null; const iso = (x) => x.toLocaleDateString('sv-SE');
+  if (b[0] === '8') { // contas de consumo e tributos
+    const m = +b[2] >= 8 ? (s) => mod11(s, 1) : mod10; if (m(b.slice(0, 3) + b.slice(4)) !== +b[3]) return null;
+    const v = +b.slice(4, 15) / 100; return { barras: b, linha: linhaConsumo(b), valor: ['6', '8'].includes(b[2]) && v > 0 ? v : 0, banco: '' };
+  }
+  if (mod11(b.slice(0, 4) + b.slice(5)) !== +b[4]) return null;
+  const f = +b.slice(5, 9), v = +b.slice(9, 19) / 100; let venc = '';
+  if (f >= 1000) { const hoje = new Date(), c1 = new Date(1997, 9, 7 + f), c2 = new Date(2025, 1, 22 + f - 1000); venc = iso(Math.abs(c1 - hoje) < Math.abs(c2 - hoje) ? c1 : c2); }   // o fator voltou a 1000 em 22/02/2025
+  return { barras: b, linha: linhaBancaria(b), valor: v > 0 ? v : 0, vencimento: venc, banco: BANCOS[b.slice(0, 3)] || '' };
+}
+function linhaBancaria(b) { const c1 = b.slice(0, 4) + b.slice(19, 24), c2 = b.slice(24, 34), c3 = b.slice(34, 44); return c1 + mod10(c1) + c2 + mod10(c2) + c3 + mod10(c3) + b[4] + b.slice(5, 19); }
+function linhaConsumo(b) { const m = +b[2] >= 8 ? (s) => mod11(s, 1) : mod10; return [0, 1, 2, 3].map((i) => { const p = b.slice(i * 11, i * 11 + 11); return p + m(p); }).join(''); }
+const fmtLinha = (l) => l.length === 47 ? `${l.slice(0, 5)}.${l.slice(5, 10)} ${l.slice(10, 15)}.${l.slice(15, 21)} ${l.slice(21, 26)}.${l.slice(26, 32)} ${l[32]} ${l.slice(33)}` : l.replace(/(\d{12})(?=\d)/g, '$1 ');
 function campoDoTexto(txt) {
   const out = {}, ls = txt.split('\n').map((l) => l.trim()).filter(Boolean), vals = (s) => [...s.matchAll(/(\d{1,3}(?:[.\s]\d{3})*|\d+)\s*[,.]\s*(\d{2})(?!\d)/g)].map((m) => +(m[1].replace(/\D/g, '') + '.' + m[2])).filter((v) => v > 0 && v < 1e6);
   const c = dadosDaChave(txt.replace(/[^\d\n]/g, (x) => (x === '\n' ? '\n' : '')).split('\n').join(' ')); if (c) Object.assign(out, c);
+  for (const l of txt.split('\n')) { const d = l.replace(/[^\d]/g, ''); for (const n of [47, 48]) for (let i = 0; i + n <= d.length; i++) { const bo = dadosDoBoleto(d.slice(i, i + n)); if (bo) { Object.assign(out, bo); return out; } } }
   if (!out.cnpj) for (const m of txt.matchAll(/\d{2}[.\s]?\d{3}[.\s]?\d{3}\s?[\/\\|]?\s?\d{4}\s?-?\s?\d{2}/g)) if (cnpjOk(m[0])) { out.cnpj = fmtCnpj(m[0]); break; }
   const d = txt.match(/\b(\d{2})[\/.-](\d{2})[\/.-](20\d{2})\b/); if (d && +d[2] <= 12 && +d[1] <= 31) { const iso = `${d[3]}-${d[2]}-${d[1]}`; if (iso <= hojeIso()) out.data = iso; }
   for (const re of [/valor\s+(a\s+)?pag/i, /total\s+(a\s+pagar|geral|da\s+nota|r\$)/i, /valor\s+total/i, /\btotal\b/i]) { const ix = ls.findIndex((x) => re.test(x) && !/sub\s*total|itens|tribut|desconto|troco|produtos/i.test(x)); if (ix >= 0) { const v = vals(ls[ix]).concat(vals(ls[ix + 1] || '')); if (v.length) { out.valor = v[0]; break; } } }
@@ -340,8 +386,47 @@ function campoDoTexto(txt) {
   return out;
 }
 async function ocrNota(blob, prog) {
-  let q = {}; try { q = (await qrDaNota(blob)) || {}; } catch {}
+  const q = {};
   await carregaJs('https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js');
   const w = await window.Tesseract.createWorker('por', 1, { logger: (m) => { if (m.status === 'recognizing text') prog(m.progress); } });
   try { const { data } = await w.recognize(blob); return { ...campoDoTexto(data.text), ...q }; } finally { await w.terminate(); }
+}
+
+// ---------- câmera ao vivo ----------
+async function cameraAoVivo(nativa) {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { toast('Use a câmera do celular'); nativa && nativa(); return null; }
+  let st; try { st = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: 'environment' }, width: { ideal: 3840 }, height: { ideal: 2160 } } }); }
+  catch { toast('Sem acesso à câmera aqui: usando a câmera do celular'); return null; }
+  const trilha = st.getVideoTracks()[0];
+  return new Promise((ok) => {
+    const vid = el('video', { playsinline: true, muted: true, autoplay: true, class: 'nVideo' }); vid.muted = true; vid.srcObject = st;
+    const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 1000 1000'); s.setAttribute('preserveAspectRatio', 'none'); s.setAttribute('class', 'nContorno'); const pl = document.createElementNS(s.namespaceURI, 'polygon'); s.append(pl);
+    const dica = el('div', { class: 'nDica' }, 'Procurando a nota…'), anel = el('i', {}), area = el('div', { class: 'nVivo' }, vid, s);
+    const disp = el('button', { class: 'nDisparo', 'aria-label': 'Fotografar' }, anel);
+    let luz = false; const lanterna = el('button', { class: 'hidden', onclick: async () => { luz = !luz; try { await trilha.applyConstraints({ advanced: [{ torch: luz }] }); lanterna.textContent = luz ? '🔦 Apagar' : '🔦 Lanterna'; } catch {} } }, '🔦 Lanterna');
+    try { if (trilha.getCapabilities && trilha.getCapabilities().torch) lanterna.classList.remove('hidden'); } catch {}
+    const fundo = el('div', { class: 'nCam' }, area, el('div', { class: 'nCamBarra' }, el('button', { onclick: () => fim(null) }, '✕'), disp, el('button', { onclick: () => { fim(null); nativa && nativa(); } }, '📱 Câmera do celular')), dica, lanterna);
+    document.body.append(fundo);
+    let parar = false, k = null, firme = 0, ant = null, lendo = false; const peq = telaDe(160, 120);
+    const fim = (v) => { parar = true; st.getTracks().forEach((x) => x.stop()); fundo.remove(); ok(v); };
+    async function capturar() {
+      if (parar) return; parar = true; dica.textContent = 'Pronto!'; const W = vid.videoWidth, H = vid.videoHeight; let c = telaDe(W, H); c.getContext('2d').drawImage(vid, 0, 0); let kk = k && !k.falhou ? k : null;
+      try { if ('ImageCapture' in window) { const b = await new ImageCapture(trilha).takePhoto(); const im = await imagem(b); const e = Math.min(1, 2600 / Math.max(im.width, im.height)), f = telaDe(Math.round(im.width * e), Math.round(im.height * e)); f.getContext('2d').drawImage(im, 0, 0, f.width, f.height); const k2 = acharCantos(f); if (!k2.falhou || Math.abs(f.width / f.height - W / H) < .02) { c = f; kk = k2.falhou ? kk : k2; } } } catch {}
+      if (c.width > 2600 || c.height > 2600) { const e = 2600 / Math.max(c.width, c.height), f = telaDe(Math.round(c.width * e), Math.round(c.height * e)); f.getContext('2d').drawImage(c, 0, 0, f.width, f.height); c = f; }
+      fim({ canvas: c, k: kk || acharCantos(c) });
+    }
+    disp.onclick = capturar;
+    const passo = () => {
+      if (parar) return;
+      if (vid.videoWidth && !lendo) {
+        lendo = true; { const r = area.getBoundingClientRect(), q = vid.videoWidth / vid.videoHeight; let w = r.width, h = w / q; if (h > r.height) { h = r.height; w = h * q; } Object.assign(s.style, { left: (r.width - w) / 2 + 'px', top: (r.height - h) / 2 + 'px', width: w + 'px', height: h + 'px' }); } peq.height = Math.round(160 * vid.videoHeight / vid.videoWidth); peq.getContext('2d').drawImage(vid, 0, 0, 160, peq.height); k = acharCantos(peq);
+        if (k.falhou) { pl.setAttribute('points', ''); firme = 0; dica.textContent = 'Procurando a nota… use um fundo escuro'; }
+        else { const mexeu = ant ? Math.max(...k.map((p, i) => Math.hypot(p[0] - ant[i][0], p[1] - ant[i][1]))) : 1; firme = mexeu < .02 ? firme + 1 : 0; pl.setAttribute('points', k.map(([x, y]) => `${x * 1000},${y * 1000}`).join(' ')); dica.textContent = firme ? 'Segure firme…' : 'Achei a nota. Segure o celular parado'; }
+        ant = k.falhou ? null : k; anel.style.setProperty('--p', Math.min(1, firme / 9)); s.classList.toggle('ok', firme > 0);
+        if (firme >= 9) capturar(); lendo = false;
+      }
+      setTimeout(passo, 110);
+    };
+    vid.onloadedmetadata = () => { vid.play().catch(() => {}); passo(); };
+  });
 }

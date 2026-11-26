@@ -36,7 +36,7 @@ async function corpoBruto(req) {
 export function limparNota(n) {
   return {
     id: t(n.id, 40), data: data(n.data), fornecedor: t(n.fornecedor), cnpj: t(n.cnpj, 20), numero: t(n.numero, 30), chave: t(n.chave, 60).replace(/\D/g, '').slice(0, 44),
-    desc: t(n.desc, 400), valor: num(n.valor), categoria: t(n.categoria, 60), centro: t(n.centro, 80), pagoPor: n.pagoPor === 'empresa' ? 'empresa' : 'meu', forma: t(n.forma, 40),
+    linha: t(n.linha, 60).replace(/\D/g, '').slice(0, 48), vencimento: data(n.vencimento), banco: t(n.banco, 40), desc: t(n.desc, 400), valor: num(n.valor), categoria: t(n.categoria, 60), centro: t(n.centro, 80), pagoPor: n.pagoPor === 'empresa' ? 'empresa' : 'meu', forma: t(n.forma, 40),
     empresa: t(n.empresa, 80), pedidoEm: data(n.pedidoEm), recebidoEm: data(n.recebidoEm), obs: t(n.obs, 800), missao: t(n.missao, 40),
     fotos: (Array.isArray(n.fotos) ? n.fotos : []).slice(0, 8).map((f) => ({ id: t(f.id, 60), tipo: t(f.tipo, 40) })).filter((f) => f.id),
     criado: Number(n.criado) || Date.now(), atualizado: Date.now(), ...(n.rapida ? { rapida: true } : {}),
