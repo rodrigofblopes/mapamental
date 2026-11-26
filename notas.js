@@ -6,7 +6,7 @@ const N_CENTROS = ['Obra Amaggi', 'Margareth', 'Bonfim Engenharia', 'Pessoal'];
 const N_CATS = ['Material', 'Ferramenta', 'EPI', 'Combustível', 'Alimentação', 'Hospedagem', 'Frete', 'Serviço', 'Outros'];
 const N_EMPRESAS = ['Neto Lara', 'Bonfim Engenharia'];
 const N_FORMAS = ['Pix', 'Cartão de crédito', 'Cartão de débito', 'Dinheiro', 'Boleto'];
-let NOTAS = null, NCFG = null, notasErro = '', notasAba = 'lista', notasMes = new Date().toISOString().slice(0, 7), notasBusca = '', notasObra = '', notaNova = null, NPEND = [];
+let NOTAS = null, NCFG = null, notasErro = '', notasAba = 'lista', notasMes = 'tudo', notasBusca = '', notasObra = '', notaNova = null, NPEND = [];
 const obraDe = (n) => n.centro || 'Sem obra';
 const daObraSel = (l) => (notasObra ? l.filter((n) => obraDe(n) === notasObra) : l);
 const ddmm = (d) => (d ? d.slice(8, 10) + '/' + d.slice(5, 7) : '');
@@ -137,7 +137,6 @@ function abaLista(b) {
     const q = notasBusca.trim().toLowerCase(), l = visiveis = (q ? daObraSel(todasNotas()) : doMes).filter((n) => !q || [n.fornecedor, n.desc, n.categoria, n.centro, n.obs, n.cnpj, n.numero, String(n.valor).replace('.', ','), dmy(n.data)].join(' ').toLowerCase().includes(q)).sort((x, y) => (y.data || '').localeCompare(x.data || '') || y.criado - x.criado);
     caixa.replaceChildren(...(l.length ? l.map((n) => linhaNota(n)) : [el('div', { class: 'empty' }, q ? 'Nada encontrado.' : notasObra ? `Nenhuma nota de ${notasObra} neste mês.` : 'Nenhuma nota neste mês. Toque em "Fotografar" para lançar.')]));
   }; pinta();
-  if (NOTAS.length) b.append(el('div', { class: 'nAcoes' }, el('button', { class: 'mini', onclick: backup }, '⬇ Cópia de tudo')));
 }
 function abaReembolso(b) {
   const l = todasNotas().filter((n) => n.pagoPor === 'meu' && !n.pendente), ab = l.filter((n) => situacao(n) === 'pedir'), rc = l.filter((n) => situacao(n) === 'recebido');
