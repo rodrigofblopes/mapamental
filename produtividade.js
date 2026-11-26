@@ -137,16 +137,6 @@ function renderTrello(b) {
     quadro.append(coluna);
   });
   b.append(quadro);
-  // cartões antigos, de antes de a Gestão ser só da obra: ficam guardados aqui, e o que for da obra volta para o quadro
-  const antigos = itens('trello').filter((i) => !daObra(i));
-  if (antigos.length && CAN_EDIT) {
-    const NOME = { fazer: 'A fazer', fazendo: 'Fazendo', feito: 'Feito' };
-    b.append(el('details', { class: 'antigos' }, el('summary', {}, `🗄️ Cartões antigos guardados (${antigos.length}) · toque em "Trazer" nos que são da obra`),
-      ...antigos.map((i) => el('div', { class: 'item' },
-        el('span', { class: 'txt' }, i.text, el('small', { class: 'antCol' }, ' · ' + (NOME[i.col] || i.col || ''))),
-        el('button', { class: 'ed', onclick: () => { if (!pedeEdicao()) return; i.obra = OBRA_ATUAL; salvarSec('trello'); toast('Voltou para o quadro'); rerender('trello'); } }, '↩ Trazer'),
-        el('button', { class: 'ed x', title: 'Apagar de vez', onclick: () => apagar('trello', i, `o cartão "${i.text}"`) }, '✕')))));
-  }
 }
 
 // Notion: páginas com título e texto
