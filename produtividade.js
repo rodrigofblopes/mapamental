@@ -3,8 +3,8 @@
 // cuja lista "nodes" são os itens da seção. Assim usa a mesma nuvem e a mesma senha.
 
 const SECOES = {
-  meta:   { nome: 'Missão',             sub: 'Tarefas do dia: marque o que foi feito.',               icone: '🎯', cor: '#d9534f' },
-  trello: { nome: 'Gestão de Atividades da Obra', sub: 'Só as atividades da obra que está no Campo (Amaggi). Arraste os cartões entre as colunas.', icone: '📋', cor: '#5b9bd5' },
+  meta:   { nome: 'Missão',             sub: 'Lista de compras da obra: marque o que já comprou. A nota de cada compra fica no 🧾.',               icone: '🎯', cor: '#d9534f' },
+  trello: { nome: 'Gestão de Atividades da Obra', sub: 'O que precisa ser feito na obra (Amaggi): atividades, conversar com alguém, cobrar um documento. Arraste os cartões entre as colunas.', icone: '📋', cor: '#5b9bd5' },
   contas: { nome: 'Contas Mensais', sub: 'Contas do mês, o que já foi pago e o custo fixo mensal do CNPJ. Só aparece para quem entrou com a senha.', icone: '💳', cor: '#4fb3a9' },
   notas:  { nome: 'Notas e Reembolso', sub: 'Foto da nota, quem pagou e o PDF para pedir o reembolso. Lançar não pede senha; ver as notas pede uma vez.', icone: '🧾', cor: '#e0b84a' },
   notion: { nome: 'Central de Organização', sub: 'Páginas de anotações, estilo Notion.',              icone: '🗂️', cor: '#a678c9' },
@@ -42,7 +42,7 @@ function showHub() {
   const meta = itens('meta'), tre = itens('trello').filter(daObra), pag = itens('notion'), lean = itens('lean');
   const cards = [
     ['#/mapas', '🧠', 'Mapa Mental', `${nMapas} mapa${nMapas === 1 ? '' : 's'}`, '#c8862f'],
-    ['#/s/meta', SECOES.meta.icone, SECOES.meta.nome, `${meta.filter((i) => !i.done).length} pendente(s) · ${meta.filter((i) => i.done).length} feita(s)`, SECOES.meta.cor],
+    ['#/s/meta', SECOES.meta.icone, SECOES.meta.nome, `${meta.filter((i) => !i.done).length} a comprar · ${meta.filter((i) => i.done).length} comprado(s)`, SECOES.meta.cor],
     ['#/s/trello', SECOES.trello.icone, 'Trello · ' + SECOES.trello.nome, COLUNAS.map(([c, n]) => `${n}: ${tre.filter((i) => i.col === c).length}`).join(' · '), SECOES.trello.cor],
     ['#/s/notion', SECOES.notion.icone, 'Notion · ' + SECOES.notion.nome, `${pag.length} página(s)`, SECOES.notion.cor],
     ['#/s/lean', SECOES.lean.icone, SECOES.lean.nome, `${lean.length} material(is)`, SECOES.lean.cor],
@@ -71,7 +71,7 @@ const rerender = (key) => { if (location.hash === '#/s/' + key) showSec(key); };
 // atalhos no topo de Missão, Gestão e Notas: só leva de uma aba para a outra
 function ponte(atual) {
   const meta = itens('meta'), tre = itens('trello').filter(daObra), nNotas = typeof NOTAS !== 'undefined' && NOTAS ? todasNotas().length : null;
-  const abas = [['meta', '🎯 Missão', `${meta.filter((i) => !i.done).length} pendente(s)`], ['trello', '📋 Gestão', `${tre.filter((i) => i.col !== 'feito').length} em aberto`], ['notas', '🧾 Notas', nNotas == null ? '' : `${nNotas} nota(s)`]];
+  const abas = [['meta', '🎯 Missão', `${meta.filter((i) => !i.done).length} a comprar`], ['trello', '📋 Gestão', `${tre.filter((i) => i.col !== 'feito').length} em aberto`], ['notas', '🧾 Notas', nNotas == null ? '' : `${nNotas} nota(s)`]];
   return el('nav', { class: 'ponte' }, ...abas.map(([k, n, s]) => el('a', { class: k === atual ? 'on' : '', href: '#/s/' + k }, el('b', {}, n), s ? el('small', {}, s) : null)));
 }
 
@@ -85,7 +85,7 @@ function campoNovo(placeholder, aoCriar) {
 // Missão (antiga Meta Diária): lista com caixinhas
 function renderMeta(b) {
   const lista = itens('meta'); if (CAN_EDIT && CLOUD && !NOTAS && !notasErro) carregarNotas();
-  b.append(campoNovo('Nova meta (ex.: Comprar parafusos em PVH)', (t) => { secDoc('meta', true).nodes.unshift({ id: novoId(), text: t, done: false, criado: Date.now() }); salvarSec('meta'); rerender('meta'); setTimeout(() => $('secBody').querySelector('input').focus()); }));
+  b.append(campoNovo('O que comprar (ex.: parafusos 4,2 x 13 em PVH)', (t) => { secDoc('meta', true).nodes.unshift({ id: novoId(), text: t, done: false, criado: Date.now() }); salvarSec('meta'); rerender('meta'); setTimeout(() => $('secBody').querySelector('input').focus()); }));
   const pend = lista.filter((i) => !i.done), feitas = lista.filter((i) => i.done);
   const linha = (i) => el('div', { class: 'item' + (i.done ? ' done' : '') },
     el('input', { type: 'checkbox', checked: i.done, disabled: !CAN_EDIT, onchange: () => { i.done = !i.done; i.feito = i.done ? Date.now() : null; salvarSec('meta'); rerender('meta'); } }),
@@ -94,8 +94,8 @@ function renderMeta(b) {
     CLOUD ? el('button', { class: 'ed nMissao' + (notaDaMissao(i.id) ? ' tem' : ''), title: notaDaMissao(i.id) ? 'Abrir a nota desta compra' : 'Guardar a nota desta compra', onclick: () => abrirNotaDaMissao(i) }, notaDaMissao(i.id) ? '🧾 ' + BRL(notaDaMissao(i.id).valor) : '🧾') : null,
     el('button', { class: 'ed lapis', title: 'Editar', 'aria-label': 'Editar a missão', onclick: (e) => editarNaLinha(e.currentTarget.parentNode.querySelector('.txt'), i, 'meta') }, '✎'),
     el('button', { class: 'ed x', title: 'Apagar', onclick: () => apagar('meta', i) }, '✕'));
-  b.append(el('h4', {}, `Pendentes (${pend.length})`), ...(pend.length ? pend.map(linha) : [el('div', { class: 'empty' }, 'Nada pendente. 🎉')]));
-  if (feitas.length) b.append(el('h4', {}, `Feitas (${feitas.length})`, el('button', { class: 'ed mini', onclick: () => { if (!pedeEdicao() || !confirm('Apagar as ' + feitas.length + ' metas feitas?')) return; secDoc('meta').nodes = pend; salvarSec('meta'); rerender('meta'); } }, 'Limpar feitas')), ...feitas.map(linha));
+  b.append(el('h4', {}, `A comprar (${pend.length})`), ...(pend.length ? pend.map(linha) : [el('div', { class: 'empty' }, 'Nada para comprar. 🎉')]));
+  if (feitas.length) b.append(el('h4', {}, `Comprado (${feitas.length})`, el('button', { class: 'ed mini', onclick: () => { if (!pedeEdicao() || !confirm('Apagar as ' + feitas.length + ' metas feitas?')) return; secDoc('meta').nodes = pend; salvarSec('meta'); rerender('meta'); } }, 'Limpar feitas')), ...feitas.map(linha));
 }
 
 // Trello: 3 colunas, arrastar e soltar
@@ -110,7 +110,7 @@ function renderTrello(b) {
       secDoc('trello').nodes = itens('trello').filter(daObra);
       salvarSec('meta'); salvarSec('trello'); toast(`${fora.length} cartões movidos para a Missão`); rerender('trello');
     } }, 'Mover para a Missão')));
-  b.append(campoNovo(`Nova atividade da obra ${OBRA_ATUAL} (entra em "A fazer")`, (t) => { secDoc('trello', true).nodes.push({ id: novoId(), text: t, col: 'fazer', obra: OBRA_ATUAL, criado: Date.now() }); salvarSec('trello'); rerender('trello'); setTimeout(() => $('secBody').querySelector('.newRow input').focus()); }));
+  b.append(campoNovo(`Atividade, conversa ou cobrança (ex.: cobrar a ART do cliente)`, (t) => { secDoc('trello', true).nodes.push({ id: novoId(), text: t, col: 'fazer', obra: OBRA_ATUAL, criado: Date.now() }); salvarSec('trello'); rerender('trello'); setTimeout(() => $('secBody').querySelector('.newRow input').focus()); }));
   const quadro = el('div', { class: 'quadro' });
   const mover = (i, col) => { if (!pedeEdicao()) return; i.col = col; salvarSec('trello'); rerender('trello'); };
   COLUNAS.forEach(([col, nome], ci) => {
