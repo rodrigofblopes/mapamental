@@ -64,9 +64,16 @@ function showSec(key) {
   $('secTitle').textContent = s.icone + ' ' + s.nome; $('secSub').textContent = s.sub;
   const b = $('secBody'); b.innerHTML = ''; b.className = 'sec-' + key;
   if (fechado() && key !== 'notas') { b.append(el('div', { class: 'empty' }, '🔒 Esta parte é só para quem tem a senha.'), el('button', { class: 'pri', onclick: () => login() }, 'Entrar com a senha')); return; }
+  if (['meta', 'trello', 'notas'].includes(key)) b.append(ponte(key));
   ({ meta: renderMeta, trello: renderTrello, notion: renderNotion, lean: renderLean, contas: renderContas, notas: renderNotas })[key](b);
 }
 const rerender = (key) => { if (location.hash === '#/s/' + key) showSec(key); };
+// atalhos no topo de Missão, Gestão e Notas: só leva de uma aba para a outra
+function ponte(atual) {
+  const meta = itens('meta'), tre = itens('trello').filter(daObra), nNotas = typeof NOTAS !== 'undefined' && NOTAS ? todasNotas().length : null;
+  const abas = [['meta', '🎯 Missão', `${meta.filter((i) => !i.done).length} pendente(s)`], ['trello', '📋 Gestão', `${tre.filter((i) => i.col !== 'feito').length} em aberto`], ['notas', '🧾 Notas', nNotas == null ? '' : `${nNotas} nota(s)`]];
+  return el('nav', { class: 'ponte' }, ...abas.map(([k, n, s]) => el('a', { class: k === atual ? 'on' : '', href: '#/s/' + k }, el('b', {}, n), s ? el('small', {}, s) : null)));
+}
 
 function campoNovo(placeholder, aoCriar) {
   const inp = el('input', { placeholder, maxlength: 300 });
