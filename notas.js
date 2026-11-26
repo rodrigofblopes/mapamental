@@ -121,8 +121,17 @@ function linhaNota(n, extra) {
     el('span', { class: 'nSit ' + c }, n.pendente ? '📵 a enviar' : st + (n.recebidoEm ? ' ' + ddmm(n.recebidoEm) : n.pedidoEm && n.pagoPor === 'meu' ? ' ' + ddmm(n.pedidoEm) : '')),
     el('b', { class: 'valor' }, BRL(n.valor)));
 }
+// Reembolso é para pedir todo mês: nota do meu bolso parada há mais de 30 dias (ou de mês passado) acende o aviso.
+function avisoReembolso(b, comBotao) {
+  const hoje = hojeIso(), mesAtual = hoje.slice(0, 7), dias = (d) => Math.round((new Date(hoje + 'T12:00') - new Date(d + 'T12:00')) / 864e5);
+  const ab = todasNotas().filter((n) => n.pagoPor === 'meu' && !n.pendente && situacao(n) === 'pedir' && n.data), velhas = ab.filter((n) => n.data.slice(0, 7) < mesAtual || dias(n.data) > 30);
+  if (!velhas.length) return;
+  const mais = ab.reduce((a, n) => (n.data < a ? n.data : a), ab[0].data);
+  b.append(el('div', { class: 'nLembra' }, el('span', {}, el('b', {}, `⏰ ${ab.length} nota${ab.length > 1 ? 's' : ''} do seu bolso esperando reembolso: ${BRL(somaN(ab))}.`), ` A mais antiga é de ${dmy(mais)}, há ${dias(mais)} dias. O certo é pedir todo mês, sem deixar acumular.`),
+    comBotao ? el('button', { class: 'pri', onclick: () => { notasAba = 'reembolso'; showSec('notas'); } }, '💸 Pedir agora') : null));
+}
 function abaLista(b) {
-  navMes(b);
+  notasMes = 'tudo'; avisoReembolso(b, true);
   const obras = [...new Set([...NCFG.centros, ...todasNotas().map(obraDe)])].filter((o) => todasNotas().some((n) => obraDe(n) === o));
   if (notasObra && !obras.includes(notasObra)) notasObra = '';
   if (obras.length > 1) b.append(el('div', { class: 'nObras' }, ...['', ...obras].map((o) => el('button', { class: o === notasObra ? 'on' : '', onclick: () => { notasObra = o; showSec('notas'); } }, o || 'Todas as obras'))));
@@ -135,11 +144,12 @@ function abaLista(b) {
   b.append(el('div', { class: 'nRelat' }, env, envJ, quem), el('div', { class: 'newRow' }, bus), caixa);
   const pinta = () => {
     const q = notasBusca.trim().toLowerCase(), l = visiveis = (q ? daObraSel(todasNotas()) : doMes).filter((n) => !q || [n.fornecedor, n.desc, n.categoria, n.centro, n.obs, n.cnpj, n.numero, String(n.valor).replace('.', ','), dmy(n.data)].join(' ').toLowerCase().includes(q)).sort((x, y) => (y.data || '').localeCompare(x.data || '') || y.criado - x.criado);
-    caixa.replaceChildren(...(l.length ? l.map((n) => linhaNota(n)) : [el('div', { class: 'empty' }, q ? 'Nada encontrado.' : notasObra ? `Nenhuma nota de ${notasObra} neste mês.` : 'Nenhuma nota neste mês. Toque em "Fotografar" para lançar.')]));
+    caixa.replaceChildren(...(l.length ? l.map((n) => linhaNota(n)) : [el('div', { class: 'empty' }, q ? 'Nada encontrado.' : notasObra ? `Nenhuma nota de ${notasObra}.` : 'Nenhuma nota ainda. Toque em "Fotografar" para lançar.')]));
   }; pinta();
 }
 function abaReembolso(b) {
   const l = todasNotas().filter((n) => n.pagoPor === 'meu' && !n.pendente), ab = l.filter((n) => situacao(n) === 'pedir'), rc = l.filter((n) => situacao(n) === 'recebido');
+  avisoReembolso(b, false);
   b.append(el('div', { class: 'kpis' }, kpi('A pedir', BRL(somaN(ab)), ab.length ? 'bad' : 'ok'), kpi('Já recebi', BRL(somaN(rc)), 'ok')));
   const grupo = (titulo, lista, acoes) => {
     b.append(el('h4', {}, `${titulo} (${lista.length})`)); if (!lista.length) { b.append(el('div', { class: 'empty' }, 'Nada aqui.')); return; }
