@@ -82,9 +82,10 @@ function renderMeta(b) {
   const pend = lista.filter((i) => !i.done), feitas = lista.filter((i) => i.done);
   const linha = (i) => el('div', { class: 'item' + (i.done ? ' done' : '') },
     el('input', { type: 'checkbox', checked: i.done, disabled: !CAN_EDIT, onchange: () => { i.done = !i.done; i.feito = i.done ? Date.now() : null; salvarSec('meta'); rerender('meta'); } }),
-    el('span', { class: 'txt', ondblclick: () => editarTexto(i, 'meta') }, i.text),
+    el('span', { class: 'txt', ondblclick: (e) => editarNaLinha(e.currentTarget, i, 'meta') }, i.text),
     el('span', { class: 'quando' }, new Date(i.criado || Date.now()).toLocaleDateString('pt-BR')),
     CLOUD ? el('button', { class: 'ed nMissao' + (notaDaMissao(i.id) ? ' tem' : ''), title: notaDaMissao(i.id) ? 'Abrir a nota desta compra' : 'Guardar a nota desta compra', onclick: () => abrirNotaDaMissao(i) }, notaDaMissao(i.id) ? '🧾 ' + BRL(notaDaMissao(i.id).valor) : '🧾') : null,
+    el('button', { class: 'ed lapis', title: 'Editar', 'aria-label': 'Editar a missão', onclick: (e) => editarNaLinha(e.currentTarget.parentNode.querySelector('.txt'), i, 'meta') }, '✎'),
     el('button', { class: 'ed x', title: 'Apagar', onclick: () => apagar('meta', i) }, '✕'));
   b.append(el('h4', {}, `Pendentes (${pend.length})`), ...(pend.length ? pend.map(linha) : [el('div', { class: 'empty' }, 'Nada pendente. 🎉')]));
   if (feitas.length) b.append(el('h4', {}, `Feitas (${feitas.length})`, el('button', { class: 'ed mini', onclick: () => { if (!pedeEdicao() || !confirm('Apagar as ' + feitas.length + ' metas feitas?')) return; secDoc('meta').nodes = pend; salvarSec('meta'); rerender('meta'); } }, 'Limpar feitas')), ...feitas.map(linha));
@@ -263,6 +264,15 @@ function apagar(key, i, oque) {
   if (!pedeEdicao()) return;
   if (oque && !confirm('Apagar ' + oque + '?')) return;
   const d = secDoc(key); d.nodes = d.nodes.filter((x) => x !== i); salvarSec(key); rerender(key);
+}
+// edita na própria linha: Enter ou tocar fora salva, Esc desiste
+function editarNaLinha(span, i, key) {
+  if (!CAN_EDIT || !span || span.tagName === 'INPUT') return;
+  const inp = el('input', { class: 'txt editando', value: i.text, 'aria-label': 'Texto da missão' }); let feito = false;
+  const fim = (salva) => { if (feito) return; feito = true; const v = inp.value.trim(); if (salva && v && v !== i.text) { i.text = v; i.editado = Date.now(); salvarSec(key); } rerender(key); };
+  inp.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); fim(true); } else if (e.key === 'Escape') fim(false); };
+  inp.onblur = () => fim(true);
+  span.replaceWith(inp); inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length);
 }
 function editarTexto(i, key) {
   if (!CAN_EDIT) return;
