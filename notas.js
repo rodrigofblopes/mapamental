@@ -122,9 +122,12 @@ function abaLista(b) {
   navMes(b); const doMes = noMes(todasNotas()), meu = doMes.filter((n) => n.pagoPor === 'meu'), emp = doMes.filter((n) => n.pagoPor === 'empresa'), rec = todasNotas().filter((n) => ['pedir', 'pedido'].includes(situacao(n)));
   b.append(el('div', { class: 'kpis' }, kpi('Do meu bolso', BRL(somaN(meu)), meu.length ? 'warn' : ''), kpi('Empresa pagou', BRL(somaN(emp))), kpi('Falta me pagarem', BRL(somaN(rec)), rec.length ? 'bad' : 'ok')));
   const bus = el('input', { id: 'nBusca', placeholder: 'Buscar por fornecedor, item, valor…', value: notasBusca, oninput: (e) => { notasBusca = e.target.value; pinta(); } });
-  const caixa = el('div', {}); b.append(el('div', { class: 'newRow' }, bus), caixa);
+  const caixa = el('div', {}); let visiveis = [];
+  const quem = el('select', { class: 'nQuemSel', 'aria-label': 'Quais notas' }, el('option', { value: 'todas' }, 'Tudo, separado'), el('option', { value: 'meu' }, 'Só o que eu paguei'), el('option', { value: 'empresa' }, 'Só o que a empresa pagou'));
+  const env = el('button', { class: 'pri nEnviar', onclick: () => enviarRelatorio(visiveis, quem.value, env) }, '📤 Enviar relatório em PDF');
+  b.append(el('div', { class: 'nRelat' }, env, quem), el('div', { class: 'newRow' }, bus), caixa);
   const pinta = () => {
-    const q = notasBusca.trim().toLowerCase(), l = (q ? todasNotas() : doMes).filter((n) => !q || [n.fornecedor, n.desc, n.categoria, n.centro, n.obs, n.cnpj, n.numero, String(n.valor).replace('.', ','), dmy(n.data)].join(' ').toLowerCase().includes(q)).sort((x, y) => (y.data || '').localeCompare(x.data || '') || y.criado - x.criado);
+    const q = notasBusca.trim().toLowerCase(), l = visiveis = (q ? todasNotas() : doMes).filter((n) => !q || [n.fornecedor, n.desc, n.categoria, n.centro, n.obs, n.cnpj, n.numero, String(n.valor).replace('.', ','), dmy(n.data)].join(' ').toLowerCase().includes(q)).sort((x, y) => (y.data || '').localeCompare(x.data || '') || y.criado - x.criado);
     caixa.replaceChildren(...(l.length ? l.map((n) => linhaNota(n)) : [el('div', { class: 'empty' }, q ? 'Nada encontrado.' : 'Nenhuma nota neste mês. Toque em "Nova nota" e tire a foto.')]));
   }; pinta();
   if (NOTAS.length) b.append(el('div', { class: 'nAcoes' }, el('button', { class: 'mini', onclick: () => csv(doMes) }, '⬇ Planilha'), el('button', { class: 'mini', onclick: backup }, '⬇ Cópia de tudo')));
@@ -165,28 +168,62 @@ async function montarPdf(paginas) {
   const x0 = tam, T = 3 + N * 3; poe(`xref\n0 ${T}\n0000000000 65535 f \n` + Array.from({ length: T - 1 }, (_, i) => String(pos[i + 1]).padStart(10, '0') + ' 00000 n \n').join('') + `trailer<</Size ${T}/Root 1 0 R>>\nstartxref\n${x0}\n%%EOF`);
   return new Blob(partes, { type: 'application/pdf' });
 }
-async function pdfReembolso(l, e) {
+// Relatório em PDF: resumo, uma tabela por "quem pagou" e, depois, a foto de cada nota com o mesmo número da tabela.
+async function pdfNotas({ titulo, sub, secoes, arquivo }) {
   const pags = [], anexos = [], F = (p, s) => `${p} ${s}px system-ui,Arial,sans-serif`, corta = (x, s, w) => { s = String(s || ''); if (x.measureText(s).width <= w) return s; while (s && x.measureText(s + '…').width > w) s = s.slice(0, -1); return s + '…'; };
-  const POR = 16; for (let p = 0; p * POR < l.length; p++) {
-    const [c, x] = paginaPdf(); let y = 130; x.fillStyle = '#1f2023'; x.font = F(800, 52); x.fillText('Pedido de reembolso', 90, y); x.font = F(400, 27); x.fillStyle = '#5c6066'; x.fillText([e !== 'Sem empresa' && e, dmy(hojeIso()), `${l.length} nota${l.length > 1 ? 's' : ''}`].filter(Boolean).join('  ·  '), 90, y + 48);
-    y = 260; x.font = F(700, 23); [['Data', 90], ['O que é', 230], ['Obra', 780]].forEach(([s, k]) => x.fillText(s, k, y)); x.textAlign = 'right'; x.fillText('Valor', PW - 90, y); x.textAlign = 'left'; x.fillStyle = '#222'; x.fillRect(90, y + 14, PW - 180, 3); y += 60;
-    l.slice(p * POR, p * POR + POR).forEach((n) => { x.fillStyle = '#1f2023'; x.font = F(400, 27); x.fillText(dmy(n.data).slice(0, 5), 90, y); x.font = F(700, 27); x.fillText(corta(x, n.fornecedor || n.desc, 520), 230, y); x.font = F(400, 24); x.fillText(corta(x, n.centro, 200), 780, y); x.font = F(700, 27); x.textAlign = 'right'; x.fillText(BRL(n.valor), PW - 90, y); x.textAlign = 'left'; x.fillStyle = '#5c6066'; x.font = F(400, 22); x.fillText(corta(x, [n.fornecedor && n.desc, n.forma].filter(Boolean).join('  ·  '), 540), 230, y + 31); x.fillStyle = '#ddd'; x.fillRect(90, y + 52, PW - 180, 1.5); y += 92; });
-    if ((p + 1) * POR >= l.length) { x.fillStyle = '#222'; x.fillRect(90, y - 40, PW - 180, 3); x.font = F(800, 38); x.fillText('Total', 90, y + 34); x.textAlign = 'right'; x.fillText(BRL(somaN(l)), PW - 90, y + 34); x.textAlign = 'left'; }
-    pags.push(c);
+  const COR = { meu: '#c98a12', empresa: '#159e98' }, todas = secoes.flatMap((s) => s.notas.map((n) => ({ n, s }))); todas.forEach((o, i) => { o.num = i + 1; });
+  let c, x, y; const nova = () => { [c, x] = paginaPdf(); pags.push(c); y = 110; }, cabe = (h) => { if (y + h > PH - 90) { nova(); x.fillStyle = '#5c6066'; x.font = F(400, 22); x.fillText(titulo + ' (continuação)', 90, y); y += 50; } };
+  nova(); x.fillStyle = '#1f2023'; x.font = F(800, 50); x.fillText(titulo, 90, y + 20); x.font = F(400, 26); x.fillStyle = '#5c6066'; x.fillText(sub, 90, y + 66); y += 120;
+  // resumo
+  const bx = secoes.length; x.fillStyle = '#f4f2ee'; x.fillRect(90, y, PW - 180, 70 + bx * 46); let yy = y + 50; x.font = F(600, 27);
+  secoes.forEach((s) => { x.fillStyle = COR[s.tipo]; x.fillRect(116, yy - 18, 14, 14); x.fillStyle = '#1f2023'; x.fillText(`${s.nome} (${s.notas.length})`, 144, yy); x.textAlign = 'right'; x.fillText(BRL(somaN(s.notas)), PW - 116, yy); x.textAlign = 'left'; yy += 46; });
+  x.fillStyle = '#1f2023'; x.font = F(800, 30); x.fillText('Total', 116, yy + 4); x.textAlign = 'right'; x.fillText(BRL(somaN(secoes.flatMap((s) => s.notas))), PW - 116, yy + 4); x.textAlign = 'left'; y += 110 + bx * 46;
+  // uma tabela por seção
+  for (const s of secoes) {
+    if (!s.notas.length) continue; cabe(170);
+    x.fillStyle = COR[s.tipo]; x.fillRect(90, y, PW - 180, 56); x.fillStyle = '#fff'; x.font = F(800, 28); x.fillText(s.nome.toUpperCase(), 110, y + 38); x.textAlign = 'right'; x.fillText(BRL(somaN(s.notas)), PW - 110, y + 38); x.textAlign = 'left'; y += 96;
+    x.fillStyle = '#5c6066'; x.font = F(700, 21); x.fillText('Nº', 90, y); x.fillText('Data', 150, y); x.fillText('O que é  ·  onde comprei', 310, y); x.textAlign = 'right'; x.fillText('Valor', PW - 90, y); x.textAlign = 'left'; y += 18; x.fillStyle = '#222'; x.fillRect(90, y, PW - 180, 2); y += 44;
+    for (const o of todas.filter((z) => z.s === s)) {
+      cabe(92); const n = o.n; x.fillStyle = '#1f2023'; x.font = F(700, 25); x.fillText(String(o.num), 90, y); x.font = F(400, 24); x.fillText(dmy(n.data), 146, y);
+      x.font = F(700, 27); x.fillText(corta(x, n.desc || n.fornecedor || 'Nota', 620), 310, y); x.textAlign = 'right'; x.fillText(BRL(n.valor), PW - 90, y); x.textAlign = 'left';
+      x.fillStyle = '#5c6066'; x.font = F(400, 23); x.fillText(corta(x, [n.desc ? n.fornecedor : '', n.centro, (n.fotos || []).length ? '' : 'sem foto'].filter(Boolean).join('  ·  '), 620), 310, y + 32); x.fillStyle = '#e2e2e2'; x.fillRect(90, y + 54, PW - 180, 1.5); y += 92;
+    }
+    y += 20;
   }
-  for (const n of l) for (const f of n.fotos || []) {
+  x.fillStyle = '#9a9da1'; x.font = F(400, 20); x.fillText(`Gerado em ${dmy(hojeIso())}. As fotos das notas vêm nas próximas páginas, com o mesmo número da tabela.`, 90, PH - 60);
+  // fotos
+  for (const o of todas) for (const f of o.n.fotos || []) {
     try {
-      const bl = await (await fetch(await urlFoto(f.id))).blob(); if (f.tipo === 'application/pdf') { anexos.push(new File([bl], `nota-${ddmm(n.data).replace('/', '-')}-${(n.fornecedor || 'nota').replace(/[^\w]+/g, '-').slice(0, 24)}.pdf`, { type: 'application/pdf' })); continue; }
-      const im = await imagem(bl), [c, x] = paginaPdf(), k = Math.min((PW - 120) / im.width, (PH - 190) / im.height); x.fillStyle = '#1f2023'; x.font = F(700, 28); x.fillText(corta(x, `${dmy(n.data)}  ·  ${n.fornecedor || n.desc}  ·  ${BRL(n.valor)}`, PW - 120), 60, 80); x.drawImage(im, (PW - im.width * k) / 2, 120, im.width * k, im.height * k); pags.push(c);
+      const n = o.n, bl = await (await fetch(await urlFoto(f.id))).blob();
+      if (f.tipo === 'application/pdf') { anexos.push(new File([bl], `nota-${o.num}-${(n.fornecedor || 'nota').replace(/[^\w]+/g, '-').slice(0, 24)}.pdf`, { type: 'application/pdf' })); continue; }
+      const im = await imagem(bl); [c, x] = paginaPdf(); pags.push(c);
+      x.fillStyle = COR[o.s.tipo]; x.fillRect(60, 46, 230, 44); x.fillStyle = '#fff'; x.font = F(800, 22); x.fillText(o.s.tipo === 'meu' ? 'PAGUEI' : 'EMPRESA PAGOU', 76, 76);
+      x.fillStyle = '#1f2023'; x.font = F(800, 30); x.fillText(`Nº ${o.num}  ·  ${BRL(n.valor)}`, 310, 78); x.font = F(400, 25); x.fillText(corta(x, [dmy(n.data), n.desc, n.fornecedor].filter(Boolean).join('  ·  '), PW - 120), 60, 132);
+      const k = Math.min((PW - 120) / im.width, (PH - 220) / im.height); x.drawImage(im, (PW - im.width * k) / 2, 170, im.width * k, im.height * k);
     } catch { toast('Uma foto não abriu e ficou de fora do PDF'); }
   }
-  return [new File([await montarPdf(pags)], `reembolso-${hojeIso()}.pdf`, { type: 'application/pdf' }), ...anexos];
+  return [new File([await montarPdf(pags)], arquivo, { type: 'application/pdf' }), ...anexos];
+}
+const pdfReembolso = (l, e) => pdfNotas({ titulo: 'Pedido de reembolso', sub: [e !== 'Sem empresa' && e, dmy(hojeIso()), `${l.length} nota${l.length > 1 ? 's' : ''}`].filter(Boolean).join('  ·  '), secoes: [{ nome: 'Paguei do meu bolso', tipo: 'meu', notas: l }], arquivo: `reembolso-${hojeIso()}.pdf` });
+async function compartilhar(arqs, texto) {
+  if (navigator.canShare && navigator.canShare({ files: arqs })) { try { await navigator.share({ files: arqs, text: texto }); return 'foi'; } catch (x) { if (x.name === 'AbortError') return 'cancelou'; } }
+  arqs.forEach((a) => baixar(a, a.name)); return 'baixou';
+}
+async function enviarRelatorio(l, quem, bt) {
+  const ord = (z) => [...z].sort((a, b) => (a.data || '').localeCompare(b.data || '') || a.criado - b.criado), meu = ord(l.filter((n) => n.pagoPor === 'meu')), emp = ord(l.filter((n) => n.pagoPor === 'empresa'));
+  const secoes = [quem !== 'empresa' && { nome: 'Paguei do meu bolso', tipo: 'meu', notas: meu }, quem !== 'meu' && { nome: 'A empresa pagou', tipo: 'empresa', notas: emp }].filter((s) => s && s.notas.length);
+  if (!secoes.length) return toast('Nenhuma nota para enviar');
+  const per = notasBusca.trim() ? 'Busca: ' + notasBusca.trim() : notasMes === 'tudo' ? 'Todas as notas' : nomeMes(notasMes), n = secoes.reduce((s, x) => s + x.notas.length, 0);
+  bt.disabled = true; const t0 = bt.textContent; bt.textContent = 'Montando o PDF…';
+  try {
+    const arqs = await pdfNotas({ titulo: 'Relatório de notas', sub: `${per}  ·  ${n} nota${n > 1 ? 's' : ''}`, secoes, arquivo: `notas-${notasMes === 'tudo' ? 'todas' : notasMes}.pdf` });
+    const texto = `Notas ${per}: ` + secoes.map((s) => `${s.nome.toLowerCase()} ${BRL(somaN(s.notas))}`).join(', ') + '.';
+    const r = await compartilhar(arqs, texto); if (r === 'baixou') toast('PDF baixado. Envie pelo WhatsApp como documento.');
+  } catch (e) { toast('Não consegui montar o PDF: ' + e.message); } finally { bt.disabled = false; bt.textContent = t0; }
 }
 async function enviarPdf(l, e, pedir) {
   toast('Preparando o PDF…'); let arqs; try { arqs = await pdfReembolso(l, e); } catch (x) { return toast('Não consegui montar o PDF: ' + x.message); }
-  const texto = `Reembolso: ${BRL(somaN(l))} (${l.length} nota${l.length > 1 ? 's' : ''})`; let foi = false;
-  if (navigator.canShare && navigator.canShare({ files: arqs })) { try { await navigator.share({ files: arqs, text: texto }); foi = true; } catch (x) { if (x.name === 'AbortError') return; } }
-  if (!foi) arqs.forEach((a) => baixar(a, a.name));
+  const r = await compartilhar(arqs, `Reembolso: ${BRL(somaN(l))} (${l.length} nota${l.length > 1 ? 's' : ''})`); if (r === 'cancelou') return; const foi = r === 'foi';
   if (pedir && confirm(foi ? 'Enviou? Marcar estas notas como pedidas?' : 'O PDF foi baixado. Marcar estas notas como pedidas?')) await marcar(l, 'pedidoEm');
 }
 function novoNaLista(k) { const v = (prompt('Nome:') || '').trim(); if (!v || NCFG[k].includes(v)) return null; NCFG[k] = [...NCFG[k], v]; if (CAN_EDIT) salvarCfg(); if (!$('nForm')) showSec('notas'); return v; }
