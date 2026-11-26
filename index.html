@@ -2,7 +2,11 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#1d0f0a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Mapas Mentais</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='2' y='2' width='60' height='60' rx='16' fill='%232b1710' stroke='%23c8862f' stroke-width='3'/%3E%3Cpath d='M32 32 C24 32 22 18 14 18 M32 32 C24 32 22 46 14 46 M32 32 C40 32 42 18 50 18 M32 32 C40 32 42 46 50 46' stroke='%23c8862f' stroke-width='4' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='14' cy='18' r='5' fill='%23d9534f'/%3E%3Ccircle cx='14' cy='46' r='5' fill='%235b9bd5'/%3E%3Ccircle cx='50' cy='18' r='5' fill='%236aa84f'/%3E%3Ccircle cx='50' cy='46' r='5' fill='%23e0b84a'/%3E%3Ccircle cx='32' cy='32' r='9' fill='%23c8862f'/%3E%3C/svg%3E">
 <style>
@@ -72,6 +76,27 @@
   .pagTexto{min-height:55vh;resize:vertical;background:#2f1a12;border:1px solid #5a3424;border-radius:10px;color:var(--ink);padding:14px;font-size:15px;line-height:1.6}
   .pagTexto:focus{outline:none;border-color:var(--accent)}
   @media (max-width:700px){.quadro,.notion{grid-template-columns:1fr}}
+  @media (max-width:700px){
+    .ponte{position:fixed;left:0;right:0;bottom:0;z-index:60;margin:0;gap:0;flex-wrap:nowrap;padding:6px 6px calc(6px + env(safe-area-inset-bottom));background:rgba(29,15,10,.88);-webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px);border-top:.5px solid rgba(255,255,255,.12)}
+    .ponteNome,.ponte a small{display:none}
+    .ponte a{flex:1;align-items:center;justify-content:center;border:0;background:none;border-radius:12px;padding:4px 2px;min-height:50px;color:var(--muted);-webkit-tap-highlight-color:transparent}
+    .ponte a b{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;font-weight:600}
+    .ponte a .pIc{font-size:24px;line-height:1;filter:grayscale(.6) opacity(.75)}
+    .ponte a.on{background:none;border:0;color:#e0b84a}.ponte a.on .pIc{filter:none}
+    #sec .wrap,#home .wrap{padding-bottom:calc(96px + env(safe-area-inset-bottom))}
+    #sec #homeHead,#home #homeHead{gap:4px 12px;padding-top:env(safe-area-inset-top)}
+    #sec #homeHead h1,#home #homeHead h1{order:5;flex:1 1 100%!important;font-size:32px;font-weight:800;letter-spacing:-.02em;margin:2px 0 0}
+    #sec button.back,#home button.back{background:none;border:0;color:#e0b84a;font-size:17px;padding:10px 0;min-height:44px}
+    #sec .cloud,#home .cloud{display:none}
+    #sec a.site-link,#home a.site-link{margin-left:auto;border:0;color:#e0b84a;font-size:17px;padding:10px 0}
+    #secSub{font-size:13px;margin:4px 0 14px}
+    .quadro{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:12px;margin:0 -16px;padding:0 16px 6px;scrollbar-width:none}.quadro::-webkit-scrollbar{display:none}
+    .coluna{flex:0 0 86%;scroll-snap-align:center;min-height:55vh}
+    .cartao .acoes button{min-width:40px;min-height:40px;font-size:15px}
+    .sec-meta .item{flex-wrap:wrap;row-gap:6px;min-height:52px}.sec-meta .item .txt{flex:1 1 calc(100% - 44px);font-size:16px}.sec-meta .item .quando{flex:1;margin-left:32px;font-size:12px}
+    .sec-meta .item input[type=checkbox]{width:24px;height:24px}
+    .item button.ed,.item button.x,.item button.lapis{min-width:40px;min-height:40px}
+  }
   /* Gestão de Atividades: aviso dos cartões de fora da obra */
   .aviso{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#3a2a12;border:1px solid #8a6a2a;border-radius:10px;padding:10px 12px;margin-bottom:14px;font-size:14px}
   .aviso span{flex:1;min-width:220px}
@@ -230,7 +255,7 @@
 <div id="sec" class="hidden">
   <div class="wrap">
     <div id="homeHead">
-      <button class="back" onclick="location.hash='#/'">← Produtividade</button>
+      <button class="back" onclick="location.hash='#/'">‹ Produtividade</button>
       <h1 id="secTitle" style="flex:1"></h1>
       <span class="cloud" id="cloudSec"></span>
       <button id="bLoginSec" class="hidden">🔒 Entrar para editar</button>
@@ -245,7 +270,7 @@
 <div id="home" class="hidden">
   <div class="wrap">
     <div id="homeHead">
-      <button class="back" onclick="location.hash='#/'">← Produtividade</button>
+      <button class="back" onclick="location.hash='#/'">‹ Produtividade</button>
       <h1 style="flex:1">🧠 Mapas Mentais</h1>
       <span class="cloud" id="cloudHome"></span>
       <button id="bLoginHome" class="hidden">🔒 Entrar para editar</button>

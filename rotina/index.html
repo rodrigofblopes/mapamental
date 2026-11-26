@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Rotina da Obra</title>
+<meta name="theme-color" content="#1d0f0a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Rotina da Obra">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="/rotina/manifest.json">
+<link rel="icon" href="/rotina/icone-192.png">
+<link rel="apple-touch-icon" href="/rotina/apple-180.png">
+<script>
+  // Aberto pelo ícone da tela inicial: vai direto para a Missão (compras), com Gestão e Notas na barra de baixo.
+  if (matchMedia('(display-mode: standalone)').matches || navigator.standalone || /[?&]app=1/.test(location.search)) location.replace('/#/s/meta');
+</script>
+<style>
+  body{margin:0;min-height:100vh;background:#1d0f0a;color:#f3e9df;font:16px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box}
+  main{max-width:420px;text-align:center}
+  img{width:112px;height:112px;border-radius:26px;box-shadow:0 10px 30px rgba(0,0,0,.45)}
+  h1{font-size:30px;margin:18px 0 6px}
+  p{opacity:.8;margin:0 0 20px}
+  .abrir{display:block;background:#c8862f;color:#1d0f0a;font-weight:700;text-decoration:none;border-radius:14px;padding:15px;font-size:17px}
+  .passo{background:#2b1710;border:1px solid #5a3424;border-radius:14px;padding:14px 16px;margin:18px 0 0;text-align:left;font-size:15px}
+  .passo b{color:#e0b84a}
+  button{font:inherit}
+  #instalar{display:none;width:100%;margin-top:10px;background:#159e98;color:#fff;border:0;border-radius:14px;padding:15px;font-weight:700;font-size:17px}
+</style>
+</head>
+<body>
+<main>
+  <img src="/rotina/icone-512.png" alt="">
+  <h1>Rotina da Obra</h1>
+  <p>Compras, atividades e notas da obra, lado a lado.</p>
+  <a class="abrir" href="/#/s/meta">Abrir</a>
+  <button id="instalar">📲 Pôr na tela inicial</button>
+  <div class="passo" id="ios"><b>iPhone:</b> toque em <b>Compartilhar</b> (o quadrado com a seta) e depois em <b>Adicionar à Tela de Início</b>.</div>
+  <div class="passo" id="android"><b>Android:</b> toque nos <b>⋮</b> do Chrome e depois em <b>Adicionar à tela inicial</b> (ou <b>Instalar app</b>).</div>
+</main>
+<script>
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  document.getElementById(ios ? 'android' : 'ios').style.display = 'none';
+  let pedido = null; const bt = document.getElementById('instalar');
+  addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); pedido = e; bt.style.display = 'block'; });
+  bt.onclick = async () => { if (!pedido) return; pedido.prompt(); await pedido.userChoice; pedido = null; bt.style.display = 'none'; };
+</script>
+</body>
+</html>

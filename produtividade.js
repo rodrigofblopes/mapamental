@@ -81,17 +81,17 @@ const GRUPOS = [
 function abaInfo(k) {
   const meta = itens('meta'), tre = itens('trello').filter(daObra), nNotas = typeof NOTAS !== 'undefined' && NOTAS ? todasNotas().length : null, nMapas = DB.maps.filter((m) => !isSec(m)).length;
   return {
-    meta: ['#/s/meta', '🎯 Missão', `${meta.filter((i) => !i.done).length} a comprar`],
-    trello: ['#/s/trello', '📋 Gestão', `${tre.filter((i) => i.col !== 'feito').length} em aberto`],
-    notas: ['#/s/notas', '🧾 Notas', nNotas == null ? '' : `${nNotas} nota(s)`],
-    mapas: ['#/mapas', '🧠 Mapa mental', `${nMapas} mapa(s)`],
-    notion: ['#/s/notion', '🗂️ Notion', `${itens('notion').length} página(s)`],
+    meta: ['#/s/meta', '🎯', 'Missão', `${meta.filter((i) => !i.done).length} a comprar`],
+    trello: ['#/s/trello', '📋', 'Gestão', `${tre.filter((i) => i.col !== 'feito').length} em aberto`],
+    notas: ['#/s/notas', '🧾', 'Notas', nNotas == null ? '' : `${nNotas} nota(s)`],
+    mapas: ['#/mapas', '🧠', 'Mapa mental', `${nMapas} mapa(s)`],
+    notion: ['#/s/notion', '🗂️', 'Notion', `${itens('notion').length} página(s)`],
   }[k];
 }
 function ponte(atual) {
   const g = GRUPOS.find((x) => x.abas.includes(atual)); if (!g) return null;
   return el('nav', { class: 'ponte', 'aria-label': g.nome }, el('span', { class: 'ponteNome' }, g.icone + ' ' + g.nome),
-    ...g.abas.map((k) => { const [href, n, s] = abaInfo(k); return el('a', { class: k === atual ? 'on' : '', href }, el('b', {}, n), s ? el('small', {}, s) : null); }));
+    ...g.abas.map((k) => { const [href, ic, n, s] = abaInfo(k); return el('a', { class: k === atual ? 'on' : '', href, 'aria-current': k === atual ? 'page' : false }, el('b', {}, el('span', { class: 'pIc' }, ic), ' ', el('span', { class: 'pNome' }, n)), s ? el('small', {}, s) : null); }));
 }
 
 function campoNovo(placeholder, aoCriar) {
