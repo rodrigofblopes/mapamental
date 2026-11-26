@@ -429,6 +429,15 @@ function setStatus(){
   $('homeSub').textContent=nLocal?`Você tem ${nLocal} mapa(s) salvos neste navegador. Clique em "Entrar para editar" para enviá-los à nuvem.`:CAN_EDIT?'Escolha um mapa para abrir ou crie um novo.':'Escolha um mapa para ver. Para editar, clique em "Entrar para editar".';
 }
 
+// o que cada seção tinha na última vez que veio da nuvem: o que sumir daqui foi apagado neste aparelho
+const VISTOS=new Map();
+function marcarVistos(){(DB.maps||[]).forEach(m=>{if(String(m.id).startsWith('sec-')&&Array.isArray(m.nodes))VISTOS.set(m.id,new Set(m.nodes.map(n=>n&&n.id).filter(Boolean)))})}
+function juntarDaNuvem(m,nodes){   // põe o que veio de outro aparelho sem trocar os itens que estão na tela
+  const loc=new Map(m.nodes.map(n=>[n&&n.id,n]));let novos=0;
+  m.nodes=nodes.map(n=>{if(loc.has(n.id))return loc.get(n.id);novos++;return n});
+  VISTOS.set(m.id,new Set(m.nodes.map(n=>n&&n.id).filter(Boolean)));
+  if(novos){persistLocal();const ae=document.activeElement;if(!(ae&&/INPUT|TEXTAREA/.test(ae.tagName))&&typeof rerender==='function')rerender(m.id.slice(4))}
+}
 function queueSave(m){
   persistLocal();
   if(!CLOUD||!CAN_EDIT)return;
@@ -437,7 +446,8 @@ function queueSave(m){
 }
 async function pushMap(m){
   pending.delete(m.id);saving++;setStatus();
-  try{const j=await api('PUT','',{map:plain(m)});if(+j.rev===+REV+1)REV=j.rev;lastErr=''}
+  const sec=String(m.id).startsWith('sec-'),ids=new Set(m.nodes.map(n=>n&&n.id)),apagados=sec?[...(VISTOS.get(m.id)||[])].filter(id=>!ids.has(id)):undefined;
+  try{const j=await api('PUT','',{map:plain(m),apagados});if(+j.rev===+REV+1)REV=j.rev;lastErr='';if(sec&&Array.isArray(j.nodes)&&!pending.has(m.id))juntarDaNuvem(m,j.nodes)}
   catch(e){lastErr=e.status===401?'Senha recusada':'Sem conexão — tentando de novo';if(e.status===401)logout(true);else pending.set(m.id,setTimeout(()=>pushMap(m),5000))}
   saving--;setStatus();
 }
@@ -452,7 +462,7 @@ async function login(){
   try{await api('POST','?acao=login');localStorage.setItem(PASSKEY,s);
     // as seções (Missão, Gestão, Notion, Lean) só vêm com a senha: busca tudo de novo ANTES de liberar a edição,
     // senão salvar uma seção que ainda não chegou gravaria uma vazia por cima da verdadeira
-    const j=await api('GET');DB.maps=j.maps||[];REV=j.rev;persistLocal();
+    const j=await api('GET');DB.maps=j.maps||[];REV=j.rev;marcarVistos();persistLocal();
     CAN_EDIT=true;lastErr='';toast('Pronto! Agora você pode editar');
     offerUpload();
   }catch(e){SENHA=old;toast(e.message)}
@@ -467,11 +477,11 @@ async function boot(){
   // 1) tenta a nuvem (só existe no site publicado com o banco configurado)
   try{
     const r=await fetch('/api/mapas',{cache:'no-store',headers:SENHA?{'x-senha':SENHA}:{}});const j=await r.json();
-    if(r.ok&&j.banco){CLOUD=j;REV=j.rev;DB.maps=j.maps||[];}
+    if(r.ok&&j.banco){CLOUD=j;REV=j.rev;DB.maps=j.maps||[];marcarVistos();}
   }catch(e){}
   if(CLOUD){
     CAN_EDIT=false;
-    if(SENHA){try{await api('POST','?acao=login');CAN_EDIT=!!CLOUD.secoes||(await api('GET').then(j=>{DB.maps=j.maps||[];REV=j.rev;return true}))}catch(e){SENHA='';localStorage.removeItem(PASSKEY);DB.maps=DB.maps.filter(m=>!isSec(m))}}
+    if(SENHA){try{await api('POST','?acao=login');CAN_EDIT=!!CLOUD.secoes||(await api('GET').then(j=>{DB.maps=j.maps||[];REV=j.rev;marcarVistos();return true}))}catch(e){SENHA='';localStorage.removeItem(PASSKEY);DB.maps=DB.maps.filter(m=>!isSec(m))}}
     persistLocal();setInterval(poll,6000);
     setTimeout(offerUpload,500);
   }else{
@@ -498,8 +508,8 @@ async function poll(){
       const busy=id=>pending.has(id)||(CUR&&CUR.id===id&&(drag||editing||document.activeElement===$('note')));
       remote.forEach(rm=>{
         const lm=DB.maps.find(m=>m.id===rm.id);
-        if(!lm)DB.maps.push(rm);
-        else if(!busy(rm.id)&&rm.updated>lm.updated){lm.name=rm.name;lm.nodes=rm.nodes;lm.updated=rm.updated;
+        if(!lm){DB.maps.push(rm);if(String(rm.id).startsWith('sec-'))VISTOS.set(rm.id,new Set(rm.nodes.map(n=>n&&n.id).filter(Boolean)))}
+        else if(!busy(rm.id)&&rm.updated>lm.updated){lm.name=rm.name;lm.nodes=rm.nodes;lm.updated=rm.updated;if(String(rm.id).startsWith('sec-'))VISTOS.set(rm.id,new Set(rm.nodes.map(n=>n&&n.id).filter(Boolean)));
           if(CUR&&CUR.id===lm.id){S.nodes=lm.nodes;if(S.sel&&!byId(S.sel))S.sel=null;render(false);refreshPanel()}}
       });
       const gone=DB.maps.filter(m=>!ids.has(m.id)&&!pending.has(m.id));
