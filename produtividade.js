@@ -100,16 +100,6 @@ function renderMeta(b) {
 
 // Trello: 3 colunas, arrastar e soltar
 function renderTrello(b) {
-  const fora = itens('trello').filter((i) => !daObra(i));
-  if (fora.length) b.append(el('div', { class: 'aviso' },
-    el('span', {}, `${fora.length} cartão(ões) não são da obra (financiamento, marketing, site). A Gestão de Atividades agora é só da obra ${OBRA_ATUAL}.`),
-    el('button', { class: 'pri ed', onclick: () => {
-      if (!pedeEdicao() || !confirm(`Mover os ${fora.length} cartões para a Missão? Os que estavam em "Feito" entram marcados como feitos.`)) return;
-      const meta = secDoc('meta', true);
-      fora.forEach((i) => meta.nodes.push({ id: novoId(), text: i.text, done: i.col === 'feito', criado: i.criado || Date.now(), feito: i.col === 'feito' ? Date.now() : null, deTrello: true }));
-      secDoc('trello').nodes = itens('trello').filter(daObra);
-      salvarSec('meta'); salvarSec('trello'); toast(`${fora.length} cartões movidos para a Missão`); rerender('trello');
-    } }, 'Mover para a Missão')));
   b.append(campoNovo(`Atividade, conversa ou cobrança (ex.: cobrar a ART do cliente)`, (t) => { secDoc('trello', true).nodes.push({ id: novoId(), text: t, col: 'fazer', obra: OBRA_ATUAL, criado: Date.now() }); salvarSec('trello'); rerender('trello'); setTimeout(() => $('secBody').querySelector('.newRow input').focus()); }));
   const quadro = el('div', { class: 'quadro' });
   const mover = (i, col) => { if (!pedeEdicao()) return; i.col = col; salvarSec('trello'); rerender('trello'); };
@@ -119,10 +109,11 @@ function renderTrello(b) {
       ondrop: (e) => { e.preventDefault(); const i = itens('trello').find((x) => x.id === e.dataTransfer.getData('text/plain')); if (i) mover(i, col); } },
       el('h4', {}, `${nome} (${cards.length})`));
     cards.forEach((i) => coluna.append(el('div', { class: 'cartao', draggable: CAN_EDIT ? 'true' : 'false', ondragstart: (e) => e.dataTransfer.setData('text/plain', i.id) },
-      el('div', { class: 'txt', ondblclick: () => editarTexto(i, 'trello') }, i.text),
+      el('div', { class: 'txt', ondblclick: (e) => editarNaLinha(e.currentTarget, i, 'trello') }, i.text),
       el('div', { class: 'acoes ed' },
         ci > 0 ? el('button', { title: 'Voltar coluna', onclick: () => mover(i, COLUNAS[ci - 1][0]) }, '◀') : null,
         ci < 2 ? el('button', { title: 'Avançar coluna', onclick: () => mover(i, COLUNAS[ci + 1][0]) }, '▶') : null,
+        el('button', { title: 'Editar', 'aria-label': 'Editar o cartão', onclick: (e) => editarNaLinha(e.currentTarget.closest('.cartao').querySelector('.txt'), i, 'trello') }, '✎'),
         el('button', { title: 'Apagar', onclick: () => apagar('trello', i) }, '✕')))));
     quadro.append(coluna);
   });
@@ -275,7 +266,7 @@ function apagar(key, i, oque) {
 // edita na própria linha: Enter ou tocar fora salva, Esc desiste
 function editarNaLinha(span, i, key) {
   if (!CAN_EDIT || !span || span.tagName === 'INPUT') return;
-  const inp = el('input', { class: 'txt editando', value: i.text, 'aria-label': 'Texto da missão' }); let feito = false;
+  const inp = el('input', { class: 'txt editando', value: i.text, 'aria-label': 'Editar o texto' }); let feito = false;
   const fim = (salva) => { if (feito) return; feito = true; const v = inp.value.trim(); if (salva && v && v !== i.text) { i.text = v; i.editado = Date.now(); salvarSec(key); } rerender(key); };
   inp.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); fim(true); } else if (e.key === 'Escape') fim(false); };
   inp.onblur = () => fim(true);
