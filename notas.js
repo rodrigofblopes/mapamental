@@ -2,11 +2,13 @@
 // Foto da nota (com modo scanner), quem pagou e o PDF para pedir o reembolso. Guardado em /api/notas, só com a senha.
 // O centro de custo completo é do app Visão: aqui fica só a obra de cada nota, e a planilha (CSV) leva os dados para lá.
 // Sem sinal na obra: a nota fica guardada neste aparelho e sobe sozinha quando a internet volta.
-const N_CENTROS = ['Obra Amaggi', 'Bonfim Engenharia', 'Pessoal'];
+const N_CENTROS = ['Obra Amaggi', 'Margareth', 'Bonfim Engenharia', 'Pessoal'];
 const N_CATS = ['Material', 'Ferramenta', 'EPI', 'Combustível', 'Alimentação', 'Hospedagem', 'Frete', 'Serviço', 'Outros'];
 const N_EMPRESAS = ['Neto Lara', 'Bonfim Engenharia'];
 const N_FORMAS = ['Pix', 'Cartão de crédito', 'Cartão de débito', 'Dinheiro', 'Boleto'];
-let NOTAS = null, NCFG = null, notasErro = '', notasAba = 'lista', notasMes = new Date().toISOString().slice(0, 7), notasBusca = '', notaNova = null, NPEND = [];
+let NOTAS = null, NCFG = null, notasErro = '', notasAba = 'lista', notasMes = new Date().toISOString().slice(0, 7), notasBusca = '', notasObra = '', notaNova = null, NPEND = [];
+const obraDe = (n) => n.centro || 'Sem obra';
+const daObraSel = (l) => (notasObra ? l.filter((n) => obraDe(n) === notasObra) : l);
 const ddmm = (d) => (d ? d.slice(8, 10) + '/' + d.slice(5, 7) : '');
 const dmy = (d) => (d ? d.split('-').reverse().join('/') : '');
 
@@ -24,6 +26,7 @@ async function carregarNotas() {
   try {
     const j = await nApi('GET'); NOTAS = j.notas || [];
     NCFG = { centros: N_CENTROS, categorias: N_CATS, empresas: N_EMPRESAS, ...(j.cfg || {}) };
+    if (!NCFG.margareth) { NCFG.margareth = 1; if (!NCFG.centros.includes('Margareth')) NCFG.centros = [...NCFG.centros.slice(0, 1), 'Margareth', ...NCFG.centros.slice(1)]; if (CAN_EDIT && j.cfg) salvarCfg(); }
     ['centros', 'categorias', 'empresas'].forEach((k) => { if (!NCFG[k] || !NCFG[k].length) NCFG[k] = { centros: N_CENTROS, categorias: N_CATS, empresas: N_EMPRESAS }[k]; });
     notasErro = ''; await lerPend(); enviarPend();
   } catch (e) { notasErro = e.message; if (e.status === 401 && typeof notasSaiu === 'function') notasSaiu(); }
@@ -67,8 +70,8 @@ async function limparNotasDoAparelho() { NOTAS = null; NCFG = null; notasErro = 
 
 // ---------- contas ----------
 const todasNotas = () => [...NPEND.map((p) => ({ ...p.nota, pendente: true })), ...(NOTAS || []).filter((n) => !NPEND.some((p) => p.id === n.id))];
-const situacao = (n) => n.pagoPor === 'empresa' ? 'empresa' : n.recebidoEm ? 'recebido' : n.pedidoEm ? 'pedido' : 'pedir';
-const SIT = { empresa: ['Empresa pagou', 'ok'], pedir: ['Pedir reembolso', 'bad'], pedido: ['Reembolso pedido', 'warn'], recebido: ['Reembolsado', 'ok'] };
+const situacao = (n) => n.pagoPor === 'empresa' ? 'empresa' : n.recebidoEm ? 'recebido' : 'pedir';
+const SIT = { empresa: ['Empresa pagou', 'ok'], pedir: ['A pedir', 'bad'], recebido: ['Já recebi', 'ok'] };
 const somaN = (l) => l.reduce((s, n) => s + (+n.valor || 0), 0);
 function resumoNotasHub() {
   if (!NOTAS) { if (!notasErro) carregarNotas(); return notasErro ? '⚠️ ' + notasErro : 'Carregando…'; }
@@ -119,34 +122,38 @@ function linhaNota(n, extra) {
     el('b', { class: 'valor' }, BRL(n.valor)));
 }
 function abaLista(b) {
-  navMes(b); const doMes = noMes(todasNotas()), meu = doMes.filter((n) => n.pagoPor === 'meu'), emp = doMes.filter((n) => n.pagoPor === 'empresa'), rec = todasNotas().filter((n) => ['pedir', 'pedido'].includes(situacao(n)));
+  navMes(b);
+  const obras = [...new Set([...NCFG.centros, ...todasNotas().map(obraDe)])].filter((o) => todasNotas().some((n) => obraDe(n) === o));
+  if (notasObra && !obras.includes(notasObra)) notasObra = '';
+  if (obras.length > 1) b.append(el('div', { class: 'nObras' }, ...['', ...obras].map((o) => el('button', { class: o === notasObra ? 'on' : '', onclick: () => { notasObra = o; showSec('notas'); } }, o || 'Todas as obras'))));
+  const doMes = daObraSel(noMes(todasNotas())), meu = doMes.filter((n) => n.pagoPor === 'meu'), emp = doMes.filter((n) => n.pagoPor === 'empresa'), rec = daObraSel(todasNotas()).filter((n) => ['pedir', 'pedido'].includes(situacao(n)));
   b.append(el('div', { class: 'kpis' }, kpi('Do meu bolso', BRL(somaN(meu)), meu.length ? 'warn' : ''), kpi('Empresa pagou', BRL(somaN(emp))), kpi('Falta me pagarem', BRL(somaN(rec)), rec.length ? 'bad' : 'ok')));
   const bus = el('input', { id: 'nBusca', placeholder: 'Buscar por fornecedor, item, valor…', value: notasBusca, oninput: (e) => { notasBusca = e.target.value; pinta(); } });
   const caixa = el('div', {}); let visiveis = [];
   const quem = el('select', { class: 'nQuemSel', 'aria-label': 'Quais notas' }, el('option', { value: 'todas' }, 'Tudo, separado'), el('option', { value: 'meu' }, 'Só o que eu paguei'), el('option', { value: 'empresa' }, 'Só o que a empresa pagou'));
-  const env = el('button', { class: 'pri nEnviar', onclick: () => enviarRelatorio(visiveis, quem.value, env) }, '📤 Enviar relatório em PDF');
-  b.append(el('div', { class: 'nRelat' }, env, quem), el('div', { class: 'newRow' }, bus), caixa);
+  const env = el('button', { class: 'pri nEnviar', onclick: () => enviarRelatorio(visiveis, quem.value, env) }, '📤 Enviar em PDF'), envJ = el('button', { class: 'nEnviar', onclick: () => enviarRelatorio(visiveis, quem.value, envJ, true) }, '🖼️ Enviar em imagens (JPG)');
+  b.append(el('div', { class: 'nRelat' }, env, envJ, quem), el('div', { class: 'newRow' }, bus), caixa);
   const pinta = () => {
-    const q = notasBusca.trim().toLowerCase(), l = visiveis = (q ? todasNotas() : doMes).filter((n) => !q || [n.fornecedor, n.desc, n.categoria, n.centro, n.obs, n.cnpj, n.numero, String(n.valor).replace('.', ','), dmy(n.data)].join(' ').toLowerCase().includes(q)).sort((x, y) => (y.data || '').localeCompare(x.data || '') || y.criado - x.criado);
-    caixa.replaceChildren(...(l.length ? l.map((n) => linhaNota(n)) : [el('div', { class: 'empty' }, q ? 'Nada encontrado.' : 'Nenhuma nota neste mês. Toque em "Nova nota" e tire a foto.')]));
+    const q = notasBusca.trim().toLowerCase(), l = visiveis = (q ? daObraSel(todasNotas()) : doMes).filter((n) => !q || [n.fornecedor, n.desc, n.categoria, n.centro, n.obs, n.cnpj, n.numero, String(n.valor).replace('.', ','), dmy(n.data)].join(' ').toLowerCase().includes(q)).sort((x, y) => (y.data || '').localeCompare(x.data || '') || y.criado - x.criado);
+    caixa.replaceChildren(...(l.length ? l.map((n) => linhaNota(n)) : [el('div', { class: 'empty' }, q ? 'Nada encontrado.' : notasObra ? `Nenhuma nota de ${notasObra} neste mês.` : 'Nenhuma nota neste mês. Toque em "Fotografar" para lançar.')]));
   }; pinta();
-  if (NOTAS.length) b.append(el('div', { class: 'nAcoes' }, el('button', { class: 'mini', onclick: () => csv(doMes) }, '⬇ Planilha'), el('button', { class: 'mini', onclick: backup }, '⬇ Cópia de tudo')));
+  if (NOTAS.length) b.append(el('div', { class: 'nAcoes' }, el('button', { class: 'mini', onclick: backup }, '⬇ Cópia de tudo')));
 }
 function abaReembolso(b) {
-  const l = todasNotas().filter((n) => n.pagoPor === 'meu' && !n.pendente), ab = l.filter((n) => situacao(n) === 'pedir'), pd = l.filter((n) => situacao(n) === 'pedido'), rc = l.filter((n) => situacao(n) === 'recebido');
-  b.append(el('div', { class: 'kpis' }, kpi('A pedir', BRL(somaN(ab)), ab.length ? 'bad' : 'ok'), kpi('Já pedi, falta pagar', BRL(somaN(pd)), pd.length ? 'warn' : 'ok'), kpi('Já recebi', BRL(somaN(rc)), 'ok')));
+  const l = todasNotas().filter((n) => n.pagoPor === 'meu' && !n.pendente), ab = l.filter((n) => situacao(n) === 'pedir'), rc = l.filter((n) => situacao(n) === 'recebido');
+  b.append(el('div', { class: 'kpis' }, kpi('A pedir', BRL(somaN(ab)), ab.length ? 'bad' : 'ok'), kpi('Já recebi', BRL(somaN(rc)), 'ok')));
   const grupo = (titulo, lista, acoes) => {
     b.append(el('h4', {}, `${titulo} (${lista.length})`)); if (!lista.length) { b.append(el('div', { class: 'empty' }, 'Nada aqui.')); return; }
-    [...new Set(lista.map((n) => n.empresa || 'Sem empresa'))].sort().forEach((e) => {
-      const g = lista.filter((n) => (n.empresa || 'Sem empresa') === e).sort((x, y) => x.data.localeCompare(y.data)), sel = new Set(g.map((n) => n.id)), tot = el('b', {}, BRL(somaN(g)));
+    const chave = (n) => `${n.empresa || 'Sem empresa'} · ${obraDe(n)}`;
+    [...new Set(lista.map(chave))].sort().forEach((e) => {
+      const g = lista.filter((n) => chave(n) === e).sort((x, y) => x.data.localeCompare(y.data)), sel = new Set(g.map((n) => n.id)), tot = el('b', {}, BRL(somaN(g)));
       const marca = (n) => el('input', { type: 'checkbox', checked: true, 'aria-label': 'Incluir', onchange: (ev) => { ev.target.checked ? sel.add(n.id) : sel.delete(n.id); tot.textContent = BRL(somaN(g.filter((x) => sel.has(x.id)))); } });
       const pegar = () => { const x = g.filter((n) => sel.has(n.id)); if (!x.length) toast('Marque pelo menos uma nota'); return x; };
       b.append(el('div', { class: 'nGrupo' }, el('div', { class: 'nGrupoT' }, el('span', {}, e), tot), ...g.map((n) => linhaNota(n, marca(n))), el('div', { class: 'nAcoes' }, ...acoes.map(([txt, fn, pri]) => { const bt = el('button', { class: pri ? 'pri' : '', onclick: async () => { const x = pegar(); if (!x.length) return; bt.disabled = true; try { await fn(x, e); } finally { bt.disabled = false; } } }, txt); return bt; }))));
     });
   };
-  grupo('A pedir', ab, [['📤 Enviar PDF', (x, e) => enviarPdf(x, e, true), 1], ['Já pedi', (x) => marcar(x, 'pedidoEm')]]);
-  grupo('Já pedi, falta pagar', pd, [['✅ Recebi', (x) => marcar(x, 'recebidoEm'), 1], ['📤 Enviar de novo', (x, e) => enviarPdf(x, e)], ['Voltar para a pedir', (x) => marcar(x, 'pedidoEm', '')]]);
-  if (rc.length) grupo('Já recebi', rc.sort((x, y) => y.recebidoEm.localeCompare(x.recebidoEm)).slice(0, 30), [['📤 PDF', (x, e) => enviarPdf(x, e)]]);
+  grupo('A pedir', ab, [['📤 PDF', (x, e) => enviarPdf(x, e), 1], ['🖼️ JPG', (x, e) => enviarPdf(x, e, true), 1], ['✅ Já recebi', (x) => marcar(x, 'recebidoEm')]]);
+  if (rc.length) grupo('Já recebi', rc.sort((x, y) => y.recebidoEm.localeCompare(x.recebidoEm)).slice(0, 30), [['Voltar para a pedir', (x) => marcar(x, 'recebidoEm', '')], ['📤 PDF', (x, e) => enviarPdf(x, e)]]);
 }
 async function marcar(l, campo, val) {
   const v = val === undefined ? hojeIso() : val; let ok = 0;
@@ -169,15 +176,16 @@ async function montarPdf(paginas) {
   return new Blob(partes, { type: 'application/pdf' });
 }
 // Relatório em PDF: resumo, uma tabela por "quem pagou" e, depois, a foto de cada nota com o mesmo número da tabela.
-async function pdfNotas({ titulo, sub, secoes, arquivo }) {
+async function pdfNotas({ titulo, sub, secoes, arquivo, jpg }) {
   const pags = [], anexos = [], F = (p, s) => `${p} ${s}px system-ui,Arial,sans-serif`, corta = (x, s, w) => { s = String(s || ''); if (x.measureText(s).width <= w) return s; while (s && x.measureText(s + '…').width > w) s = s.slice(0, -1); return s + '…'; };
   const COR = { meu: '#c98a12', empresa: '#159e98' }, todas = secoes.flatMap((s) => s.notas.map((n) => ({ n, s }))); todas.forEach((o, i) => { o.num = i + 1; });
   let c, x, y; const nova = () => { [c, x] = paginaPdf(); pags.push(c); y = 110; }, cabe = (h) => { if (y + h > PH - 90) { nova(); x.fillStyle = '#5c6066'; x.font = F(400, 22); x.fillText(titulo + ' (continuação)', 90, y); y += 50; } };
   nova(); x.fillStyle = '#1f2023'; x.font = F(800, 50); x.fillText(titulo, 90, y + 20); x.font = F(400, 26); x.fillStyle = '#5c6066'; x.fillText(sub, 90, y + 66); y += 120;
   // resumo
-  const bx = secoes.length; x.fillStyle = '#f4f2ee'; x.fillRect(90, y, PW - 180, 70 + bx * 46); let yy = y + 50; x.font = F(600, 27);
+  const porObra = [...new Set(secoes.map((s) => s.obra).filter(Boolean))], bx = secoes.length + (porObra.length > 1 ? porObra.length * 40 / 46 + .4 : 0); x.fillStyle = '#f4f2ee'; x.fillRect(90, y, PW - 180, 70 + bx * 46); let yy = y + 50; x.font = F(600, 27);
   secoes.forEach((s) => { x.fillStyle = COR[s.tipo]; x.fillRect(116, yy - 18, 14, 14); x.fillStyle = '#1f2023'; x.fillText(`${s.nome} (${s.notas.length})`, 144, yy); x.textAlign = 'right'; x.fillText(BRL(somaN(s.notas)), PW - 116, yy); x.textAlign = 'left'; yy += 46; });
-  x.fillStyle = '#1f2023'; x.font = F(800, 30); x.fillText('Total', 116, yy + 4); x.textAlign = 'right'; x.fillText(BRL(somaN(secoes.flatMap((s) => s.notas))), PW - 116, yy + 4); x.textAlign = 'left'; y += 110 + bx * 46;
+  if (porObra.length > 1) { x.fillStyle = '#c9c9c9'; x.fillRect(116, yy - 30, PW - 232, 1.5); x.font = F(700, 25); porObra.forEach((o) => { x.fillStyle = '#5c6066'; x.fillText('Total ' + o, 144, yy); x.textAlign = 'right'; x.fillText(BRL(somaN(secoes.filter((s) => s.obra === o).flatMap((s) => s.notas))), PW - 116, yy); x.textAlign = 'left'; yy += 40; }); yy += 18; x.font = F(600, 27); }
+  x.fillStyle = '#1f2023'; x.font = F(800, 30); x.fillText('Total', 116, yy + 4); x.textAlign = 'right'; x.fillText(BRL(somaN(secoes.flatMap((s) => s.notas))), PW - 116, yy + 4); x.textAlign = 'left'; y += 110 + Math.round(bx * 46);
   // uma tabela por seção
   for (const s of secoes) {
     if (!s.notas.length) continue; cabe(170);
@@ -198,10 +206,11 @@ async function pdfNotas({ titulo, sub, secoes, arquivo }) {
       if (f.tipo === 'application/pdf') { anexos.push(new File([bl], `nota-${o.num}-${(n.fornecedor || 'nota').replace(/[^\w]+/g, '-').slice(0, 24)}.pdf`, { type: 'application/pdf' })); continue; }
       const im = await imagem(bl); [c, x] = paginaPdf(); pags.push(c);
       x.fillStyle = COR[o.s.tipo]; x.fillRect(60, 46, 230, 44); x.fillStyle = '#fff'; x.font = F(800, 22); x.fillText(o.s.tipo === 'meu' ? 'PAGUEI' : 'EMPRESA PAGOU', 76, 76);
-      x.fillStyle = '#1f2023'; x.font = F(800, 30); x.fillText(`Nº ${o.num}  ·  ${BRL(n.valor)}`, 310, 78); x.font = F(400, 25); x.fillText(corta(x, [dmy(n.data), n.desc, n.fornecedor].filter(Boolean).join('  ·  '), PW - 120), 60, 132);
+      x.fillStyle = '#1f2023'; x.font = F(800, 30); x.fillText(`Nº ${o.num}  ·  ${BRL(n.valor)}`, 310, 78); x.font = F(400, 25); x.fillText(corta(x, [dmy(n.data), n.desc, n.fornecedor, n.centro].filter(Boolean).join('  ·  '), PW - 120), 60, 132);
       const k = Math.min((PW - 120) / im.width, (PH - 220) / im.height); x.drawImage(im, (PW - im.width * k) / 2, 170, im.width * k, im.height * k);
     } catch { toast('Uma foto não abriu e ficou de fora do PDF'); }
   }
+  if (jpg) { const base = arquivo.replace(/\.pdf$/, ''), fs = []; for (let i = 0; i < pags.length; i++) fs.push(new File([await paraJpeg(pags[i], .86)], `${base}-${String(i + 1).padStart(2, '0')}.jpg`, { type: 'image/jpeg' })); return [...fs, ...anexos]; }
   return [new File([await montarPdf(pags)], arquivo, { type: 'application/pdf' }), ...anexos];
 }
 const pdfReembolso = (l, e) => pdfNotas({ titulo: 'Pedido de reembolso', sub: [e !== 'Sem empresa' && e, dmy(hojeIso()), `${l.length} nota${l.length > 1 ? 's' : ''}`].filter(Boolean).join('  ·  '), secoes: [{ nome: 'Paguei do meu bolso', tipo: 'meu', notas: l }], arquivo: `reembolso-${hojeIso()}.pdf` });
@@ -209,22 +218,22 @@ async function compartilhar(arqs, texto) {
   if (navigator.canShare && navigator.canShare({ files: arqs })) { try { await navigator.share({ files: arqs, text: texto }); return 'foi'; } catch (x) { if (x.name === 'AbortError') return 'cancelou'; } }
   arqs.forEach((a) => baixar(a, a.name)); return 'baixou';
 }
-async function enviarRelatorio(l, quem, bt) {
-  const ord = (z) => [...z].sort((a, b) => (a.data || '').localeCompare(b.data || '') || a.criado - b.criado), meu = ord(l.filter((n) => n.pagoPor === 'meu')), emp = ord(l.filter((n) => n.pagoPor === 'empresa'));
-  const secoes = [quem !== 'empresa' && { nome: 'Paguei do meu bolso', tipo: 'meu', notas: meu }, quem !== 'meu' && { nome: 'A empresa pagou', tipo: 'empresa', notas: emp }].filter((s) => s && s.notas.length);
+async function enviarRelatorio(l, quem, bt, jpg) {
+  const ord = (z) => [...z].sort((a, b) => (a.data || '').localeCompare(b.data || '') || a.criado - b.criado), obras = [...new Set(l.map(obraDe))].sort((a, b) => NCFG.centros.indexOf(a) - NCFG.centros.indexOf(b)), varias = obras.length > 1;
+  const secoes = obras.flatMap((o) => [quem !== 'empresa' && { obra: o, nome: (varias ? o + ' · ' : '') + 'Paguei do meu bolso', tipo: 'meu', notas: ord(l.filter((n) => obraDe(n) === o && n.pagoPor === 'meu')) }, quem !== 'meu' && { obra: o, nome: (varias ? o + ' · ' : '') + 'A empresa pagou', tipo: 'empresa', notas: ord(l.filter((n) => obraDe(n) === o && n.pagoPor === 'empresa')) }]).filter((s) => s && s.notas.length);
   if (!secoes.length) return toast('Nenhuma nota para enviar');
-  const per = notasBusca.trim() ? 'Busca: ' + notasBusca.trim() : notasMes === 'tudo' ? 'Todas as notas' : nomeMes(notasMes), n = secoes.reduce((s, x) => s + x.notas.length, 0);
-  bt.disabled = true; const t0 = bt.textContent; bt.textContent = 'Montando o PDF…';
+  const per = [notasObra, notasBusca.trim() ? 'Busca: ' + notasBusca.trim() : notasMes === 'tudo' ? 'Todas as notas' : nomeMes(notasMes)].filter(Boolean).join(' · '), n = secoes.reduce((s, x) => s + x.notas.length, 0);
+  bt.disabled = true; const t0 = bt.textContent; bt.textContent = jpg ? 'Montando as imagens…' : 'Montando o PDF…';
   try {
-    const arqs = await pdfNotas({ titulo: 'Relatório de notas', sub: `${per}  ·  ${n} nota${n > 1 ? 's' : ''}`, secoes, arquivo: `notas-${notasMes === 'tudo' ? 'todas' : notasMes}.pdf` });
+    const arqs = await pdfNotas({ titulo: 'Relatório de notas', sub: `${per}  ·  ${n} nota${n > 1 ? 's' : ''}`, jpg, secoes, arquivo: `notas-${notasObra ? notasObra.toLowerCase().replace(/[^\w]+/g, '-') + '-' : ''}${notasMes === 'tudo' ? 'todas' : notasMes}.pdf` });
     const texto = `Notas ${per}: ` + secoes.map((s) => `${s.nome.toLowerCase()} ${BRL(somaN(s.notas))}`).join(', ') + '.';
-    const r = await compartilhar(arqs, texto); if (r === 'baixou') toast('PDF baixado. Envie pelo WhatsApp como documento.');
+    const r = await compartilhar(arqs, texto); if (r === 'baixou') toast(jpg ? 'Imagens baixadas. Envie pelo WhatsApp.' : 'PDF baixado. Envie pelo WhatsApp como documento.');
   } catch (e) { toast('Não consegui montar o PDF: ' + e.message); } finally { bt.disabled = false; bt.textContent = t0; }
 }
-async function enviarPdf(l, e, pedir) {
-  toast('Preparando o PDF…'); let arqs; try { arqs = await pdfReembolso(l, e); } catch (x) { return toast('Não consegui montar o PDF: ' + x.message); }
-  const r = await compartilhar(arqs, `Reembolso: ${BRL(somaN(l))} (${l.length} nota${l.length > 1 ? 's' : ''})`); if (r === 'cancelou') return; const foi = r === 'foi';
-  if (pedir && confirm(foi ? 'Enviou? Marcar estas notas como pedidas?' : 'O PDF foi baixado. Marcar estas notas como pedidas?')) await marcar(l, 'pedidoEm');
+async function enviarPdf(l, e, jpg) {
+  toast(jpg ? 'Preparando as imagens…' : 'Preparando o PDF…'); let arqs;
+  try { arqs = await pdfNotas({ titulo: 'Pedido de reembolso', sub: [e, dmy(hojeIso()), `${l.length} nota${l.length > 1 ? 's' : ''}`].filter(Boolean).join('  ·  '), secoes: [{ nome: 'Paguei do meu bolso', tipo: 'meu', notas: l }], arquivo: `reembolso-${hojeIso()}.pdf`, jpg }); } catch (x) { return toast('Não consegui montar: ' + x.message); }
+  const r = await compartilhar(arqs, `Reembolso: ${BRL(somaN(l))} (${l.length} nota${l.length > 1 ? 's' : ''})`); if (r === 'baixou') toast('Arquivo baixado. Envie pelo WhatsApp.');
 }
 function novoNaLista(k) { const v = (prompt('Nome:') || '').trim(); if (!v || NCFG[k].includes(v)) return null; NCFG[k] = [...NCFG[k], v]; if (CAN_EDIT) salvarCfg(); if (!$('nForm')) showSec('notas'); return v; }
 const baixar = (blob, nome) => { const a = el('a', { href: URL.createObjectURL(blob), download: nome }); document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); };
@@ -293,7 +302,7 @@ function formNota(n0, arquivos) {
       el('div', { class: 'nQuem' }, el('button', { class: meu ? 'on' : '', onclick: () => { n.pagoPor = 'meu'; desenha(); } }, '👛 Paguei do meu bolso'), el('button', { class: meu ? '' : 'on', onclick: () => { n.pagoPor = 'empresa'; desenha(); } }, '🏢 A empresa pagou')),
       el('div', { class: 'nCampos' }, el('label', {}, el('span', {}, 'Valor (R$)'), vin), inp('data', 'Data da nota', { type: 'date' }), inp('fornecedor', 'Onde comprei', { maxlength: 200 }), inp('desc', 'O que é', { maxlength: 400, placeholder: 'Ex.: parafusos para a platibanda' }), sel('centro', 'Obra', NCFG.centros, 'centros'), sel('empresa', meu ? 'Quem vai me pagar' : 'Qual empresa pagou', NCFG.empresas, 'empresas')),
       el('details', { class: 'nMais', open: maisAberto, ontoggle: (e) => { maisAberto = e.target.open; } }, el('summary', {}, 'Mais detalhes'), el('div', { class: 'nCampos' }, sel('forma', 'Como paguei', N_FORMAS), sel('categoria', 'Tipo', NCFG.categorias, 'categorias'), inp('cnpj', 'CNPJ do fornecedor', { maxlength: 20, inputmode: 'numeric' }), inp('numero', 'Número da nota', { maxlength: 30 }),
-        meu && !nova ? inp('pedidoEm', 'Pedi o reembolso em', { type: 'date' }) : null, meu && !nova ? inp('recebidoEm', 'Recebi em', { type: 'date' }) : null, el('label', { class: 'nLargo' }, el('span', {}, 'Observação'), el('textarea', { rows: 2, maxlength: 800, oninput: (e) => { n.obs = e.target.value; } }, n.obs || '')))),
+        meu && !nova ? inp('recebidoEm', 'Recebi em', { type: 'date' }) : null, el('label', { class: 'nLargo' }, el('span', {}, 'Observação'), el('textarea', { rows: 2, maxlength: 800, oninput: (e) => { n.obs = e.target.value; } }, n.obs || '')))),
       n.missao && itens('meta').find((x) => x.id === n.missao) ? el('div', { class: 'hint' }, '🎯 Ligada à Missão: ' + itens('meta').find((x) => x.id === n.missao).text) : null, n.chave ? el('div', { class: 'hint' }, 'Chave: ' + n.chave) : null,
       el('div', { class: 'nRodape' }, nova ? el('span', {}) : el('button', { class: 'nApagar', onclick: apagarNota }, 'Apagar'), el('span', {}, el('button', { onclick: fechar }, 'Cancelar'), ' ', bt))].filter(Boolean));
     cx.scrollTop = rolou;

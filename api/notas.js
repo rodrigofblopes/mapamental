@@ -97,7 +97,7 @@ export default async function handler(req, res) {
       const b = req.body || {};
       if (b.cfg) {
         const l = (a, n = 60) => [...new Set((Array.isArray(a) ? a : []).map((x) => t(x, 80)).filter(Boolean))].slice(0, n);
-        await redis('SET', 'notas:cfg', JSON.stringify({ centros: l(b.cfg.centros), categorias: l(b.cfg.categorias), empresas: l(b.cfg.empresas) }));
+        await redis('SET', 'notas:cfg', JSON.stringify({ centros: l(b.cfg.centros), categorias: l(b.cfg.categorias), empresas: l(b.cfg.empresas), ...(b.cfg.margareth ? { margareth: 1 } : {}) }));
         return res.json({ ok: true });
       }
       const n = b.nota && limparNota(b.nota); if (!n || !n.id || !n.data) return res.status(400).json({ erro: 'Nota sem data' });

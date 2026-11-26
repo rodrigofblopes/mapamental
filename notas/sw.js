@@ -1,5 +1,5 @@
 // abre na hora, mesmo sem sinal: usa o que está guardado e atualiza por trás. As notas (/api/) nunca são guardadas aqui.
-const C = 'notas-v3', BASE = ['/notas/', '/notas.js', '/notas/manifest.json', '/notas/icone-192.png'];
+const C = 'notas-v5', BASE = ['/notas/', '/notas.js', '/notas/manifest.json', '/notas/icone-192.png'];
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(C).then((c) => c.addAll(BASE)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', (e) => { e.waitUntil(caches.keys().then((k) => Promise.all(k.filter((x) => x.startsWith('notas-') && x !== C).map((x) => caches.delete(x)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', (e) => {
