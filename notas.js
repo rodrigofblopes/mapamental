@@ -73,6 +73,11 @@ const todasNotas = () => [...NPEND.map((p) => ({ ...p.nota, pendente: true })), 
 const situacao = (n) => n.pagoPor === 'empresa' ? 'empresa' : n.recebidoEm ? 'recebido' : 'pedir';
 const SIT = { empresa: ['Empresa pagou', 'ok'], pedir: ['A pedir', 'bad'], recebido: ['Já recebi', 'ok'] };
 const somaN = (l) => l.reduce((s, n) => s + (+n.valor || 0), 0);
+// Recebido por conta (26/11/2026): reembolso parcial que não quita notas certas; abate do total "A pedir" (todas as obras).
+// Quando todas as notas forem marcadas "Já recebi", os recebidos por conta se apagam (a conta fechou).
+const recebidos = () => (NCFG && Array.isArray(NCFG.recebidos) ? NCFG.recebidos : []);
+const somaRec = () => recebidos().reduce((s, r) => s + (+r.valor || 0), 0);
+const falta = (aPedir) => Math.max(0, Math.round((somaN(aPedir) - somaRec()) * 100) / 100);
 function resumoNotasHub() {
   if (!NOTAS) { if (!notasErro) carregarNotas(); return notasErro ? '⚠️ ' + notasErro : 'Carregando…'; }
   const ab = todasNotas().filter((n) => ['pedir', 'pedido'].includes(situacao(n)));
@@ -136,7 +141,8 @@ function abaLista(b) {
   if (notasObra && !obras.includes(notasObra)) notasObra = '';
   if (obras.length > 1) b.append(el('div', { class: 'nObras' }, ...['', ...obras].map((o) => el('button', { class: o === notasObra ? 'on' : '', onclick: () => { notasObra = o; showSec('notas'); } }, o || 'Todas as obras'))));
   const doMes = daObraSel(noMes(todasNotas())), meu = doMes.filter((n) => n.pagoPor === 'meu'), emp = doMes.filter((n) => n.pagoPor === 'empresa'), rec = daObraSel(todasNotas()).filter((n) => ['pedir', 'pedido'].includes(situacao(n)));
-  b.append(el('div', { class: 'kpis' }, kpi('Do meu bolso', BRL(somaN(meu)), meu.length ? 'warn' : ''), kpi('Empresa pagou', BRL(somaN(emp))), kpi('Falta me pagarem', BRL(somaN(rec)), rec.length ? 'bad' : 'ok')));
+  b.append(el('div', { class: 'kpis' }, kpi('Do meu bolso', BRL(somaN(meu)), meu.length ? 'warn' : ''), kpi('Empresa pagou', BRL(somaN(emp))), kpi('Falta me pagarem', BRL(notasObra ? somaN(rec) : falta(rec)), rec.length ? 'bad' : 'ok')));
+  if (!notasObra && somaRec()) b.append(el('small', { class: 'nRecNota' }, `Já descontado o recebido por conta: ${BRL(somaRec())}.`));
   const bus = el('input', { id: 'nBusca', placeholder: 'Buscar por fornecedor, item, valor…', value: notasBusca, oninput: (e) => { notasBusca = e.target.value; pinta(); } });
   const caixa = el('div', {}); let visiveis = [];
   const quem = el('select', { class: 'nQuemSel', 'aria-label': 'Quais notas' }, el('option', { value: 'todas' }, 'Tudo, separado'), el('option', { value: 'meu' }, 'Só o que eu paguei'), el('option', { value: 'empresa' }, 'Só o que a empresa pagou'));
@@ -150,7 +156,13 @@ function abaLista(b) {
 function abaReembolso(b) {
   const l = todasNotas().filter((n) => n.pagoPor === 'meu' && !n.pendente), ab = l.filter((n) => situacao(n) === 'pedir'), rc = l.filter((n) => situacao(n) === 'recebido');
   avisoReembolso(b, false);
-  b.append(el('div', { class: 'kpis' }, kpi('A pedir', BRL(somaN(ab)), ab.length ? 'bad' : 'ok'), kpi('Já recebi', BRL(somaN(rc)), 'ok')));
+  const rcb = recebidos();
+  b.append(el('div', { class: 'kpis' }, kpi('A pedir', BRL(somaN(ab)), ab.length ? 'bad' : 'ok'), ...(rcb.length ? [kpi('Recebido por conta', '− ' + BRL(somaRec()), 'ok'), kpi('Falta receber', BRL(falta(ab)), falta(ab) ? 'bad' : 'ok')] : [kpi('Já recebi', BRL(somaN(rc)), 'ok')])));
+  b.append(el('div', { class: 'nRec' }, el('h4', {}, 'Recebido por conta' + (rcb.length ? ` (${rcb.length})` : '')),
+    ...rcb.map((r) => el('div', { class: 'item nLinha' }, el('span', { class: 'nIc' }, '💵'), el('span', { style: 'flex:1' }, `${dmy(r.data)} · ${BRL(r.valor)}${r.obs ? ' · ' + r.obs : ''}`),
+      el('button', { onclick: () => { if (!confirm(`Apagar o recebimento de ${BRL(r.valor)} de ${dmy(r.data)}?`)) return; NCFG.recebidos = rcb.filter((x) => x.id !== r.id); salvarCfg(); showSec('notas'); } }, 'Apagar'))),
+    el('button', { onclick: () => { const v = parseFloat(String(prompt('Quanto recebeu (R$)? Abate do total a pedir, sem quitar notas certas.') || '').replace(/\./g, '').replace(',', '.')); if (!(v > 0)) return;
+      const obs = (prompt('Observação (opcional): quem pagou, como…') || '').trim(); NCFG.recebidos = [...rcb, { id: novoId(), data: hojeIso(), valor: Math.round(v * 100) / 100, obs }]; salvarCfg(); showSec('notas'); } }, '＋ Recebi um valor por conta')));
   const grupo = (titulo, lista, acoes) => {
     b.append(el('h4', {}, `${titulo} (${lista.length})`)); if (!lista.length) { b.append(el('div', { class: 'empty' }, 'Nada aqui.')); return; }
     const chave = (n) => `${n.empresa || 'Sem empresa'} · ${obraDe(n)}`;
@@ -167,6 +179,8 @@ function abaReembolso(b) {
 async function marcar(l, campo, val) {
   const v = val === undefined ? hojeIso() : val; let ok = 0;
   for (const n of l) { try { await salvarNota({ ...n, [campo]: v }); ok++; } catch (e) { toast('Não salvou: ' + e.message); break; } }
+  // tudo quitado: o recebido por conta já está dentro, some
+  if (campo === 'recebidoEm' && v && recebidos().length && !todasNotas().some((n) => n.pagoPor === 'meu' && !n.pendente && situacao(n) === 'pedir')) { NCFG.recebidos = []; salvarCfg(); }
   if (ok) toast(ok === 1 ? '1 nota atualizada' : ok + ' notas atualizadas'); showSec('notas');
 }
 // PDF do reembolso: a lista na primeira página e as notas em seguida (cada página é desenhada e vira uma imagem do PDF)
@@ -185,7 +199,7 @@ async function montarPdf(paginas) {
   return new Blob(partes, { type: 'application/pdf' });
 }
 // Relatório em PDF: resumo, uma tabela por "quem pagou" e, depois, a foto de cada nota com o mesmo número da tabela.
-async function pdfNotas({ titulo, sub, secoes, arquivo, jpg }) {
+async function pdfNotas({ titulo, sub, secoes, arquivo, jpg, abate }) {
   const pags = [], anexos = [], F = (p, s) => `${p} ${s}px system-ui,Arial,sans-serif`, corta = (x, s, w) => { s = String(s || ''); if (x.measureText(s).width <= w) return s; while (s && x.measureText(s + '…').width > w) s = s.slice(0, -1); return s + '…'; };
   const COR = { meu: '#c98a12', empresa: '#159e98' }, todas = secoes.flatMap((s) => s.notas.map((n) => ({ n, s }))); todas.forEach((o, i) => { o.num = i + 1; });
   let c, x, y; const nova = () => { [c, x] = paginaPdf(); pags.push(c); y = 110; }, cabe = (h) => { if (y + h > PH - 90) { nova(); x.fillStyle = '#5c6066'; x.font = F(400, 22); x.fillText(titulo + ' (continuação)', 90, y); y += 50; } };
@@ -195,6 +209,12 @@ async function pdfNotas({ titulo, sub, secoes, arquivo, jpg }) {
   secoes.forEach((s) => { x.fillStyle = COR[s.tipo]; x.fillRect(116, yy - 18, 14, 14); x.fillStyle = '#1f2023'; x.fillText(`${s.nome} (${s.notas.length})`, 144, yy); x.textAlign = 'right'; x.fillText(BRL(somaN(s.notas)), PW - 116, yy); x.textAlign = 'left'; yy += 46; });
   if (porObra.length > 1) { x.fillStyle = '#c9c9c9'; x.fillRect(116, yy - 30, PW - 232, 1.5); x.font = F(700, 25); porObra.forEach((o) => { x.fillStyle = '#5c6066'; x.fillText('Total ' + o, 144, yy); x.textAlign = 'right'; x.fillText(BRL(somaN(secoes.filter((s) => s.obra === o).flatMap((s) => s.notas))), PW - 116, yy); x.textAlign = 'left'; yy += 40; }); yy += 18; x.font = F(600, 27); }
   x.fillStyle = '#1f2023'; x.font = F(800, 30); x.fillText('Total', 116, yy + 4); x.textAlign = 'right'; x.fillText(BRL(somaN(secoes.flatMap((s) => s.notas))), PW - 116, yy + 4); x.textAlign = 'left'; y += 110 + Math.round(bx * 46);
+  if (abate && abate.length) {   // recebido por conta: total − recebido = falta receber
+    const tot = somaN(secoes.flatMap((s) => s.notas)), rec = abate.reduce((s, r) => s + (+r.valor || 0), 0), h = 70 + abate.length * 44 + 56;
+    x.fillStyle = '#eef7f1'; x.fillRect(90, y, PW - 180, h); let yr = y + 50; x.font = F(600, 26);
+    abate.forEach((r) => { x.fillStyle = '#1f2023'; x.fillText(`Recebido por conta em ${dmy(r.data)}${r.obs ? '  ·  ' + corta(x, r.obs, 420) : ''}`, 116, yr); x.textAlign = 'right'; x.fillText('− ' + BRL(r.valor), PW - 116, yr); x.textAlign = 'left'; yr += 44; });
+    x.font = F(800, 30); x.fillStyle = '#b3261e'; x.fillText('Falta receber', 116, yr + 10); x.textAlign = 'right'; x.fillText(BRL(Math.max(0, tot - rec)), PW - 116, yr + 10); x.textAlign = 'left'; y += h + 40;
+  }
   // uma tabela por seção
   for (const s of secoes) {
     if (!s.notas.length) continue; cabe(170);
@@ -241,8 +261,9 @@ async function enviarRelatorio(l, quem, bt, jpg) {
 }
 async function enviarPdf(l, e, jpg) {
   toast(jpg ? 'Preparando as imagens…' : 'Preparando o PDF…'); let arqs;
-  try { arqs = await pdfNotas({ titulo: 'Pedido de reembolso', sub: [e, dmy(hojeIso()), `${l.length} nota${l.length > 1 ? 's' : ''}`].filter(Boolean).join('  ·  '), secoes: [{ nome: 'Paguei do meu bolso', tipo: 'meu', notas: l }], arquivo: `reembolso-${hojeIso()}.pdf`, jpg }); } catch (x) { return toast('Não consegui montar: ' + x.message); }
-  const r = await compartilhar(arqs, `Reembolso: ${BRL(somaN(l))} (${l.length} nota${l.length > 1 ? 's' : ''})`); if (r === 'baixou') toast('Arquivo baixado. Envie pelo WhatsApp.');
+  const abate = l.some((n) => situacao(n) === 'pedir') ? recebidos() : [], resto = Math.max(0, somaN(l) - somaN(abate));
+  try { arqs = await pdfNotas({ titulo: 'Pedido de reembolso', sub: [e, dmy(hojeIso()), `${l.length} nota${l.length > 1 ? 's' : ''}`].filter(Boolean).join('  ·  '), secoes: [{ nome: 'Paguei do meu bolso', tipo: 'meu', notas: l }], arquivo: `reembolso-${hojeIso()}.pdf`, jpg, abate }); } catch (x) { return toast('Não consegui montar: ' + x.message); }
+  const r = await compartilhar(arqs, `Reembolso: ${BRL(somaN(l))} (${l.length} nota${l.length > 1 ? 's' : ''})` + (abate.length ? ` · já recebido por conta ${BRL(somaN(abate))} · falta ${BRL(resto)}` : '')); if (r === 'baixou') toast('Arquivo baixado. Envie pelo WhatsApp.');
 }
 function novoNaLista(k) { const v = (prompt('Nome:') || '').trim(); if (!v || NCFG[k].includes(v)) return null; NCFG[k] = [...NCFG[k], v]; if (CAN_EDIT) salvarCfg(); if (!$('nForm')) showSec('notas'); return v; }
 const baixar = (blob, nome) => { const a = el('a', { href: URL.createObjectURL(blob), download: nome }); document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); };

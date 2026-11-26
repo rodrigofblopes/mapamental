@@ -6,7 +6,7 @@ import { redis, temBanco, temAnexos, senhaOk } from './_lib.js';
 // GET    /api/notas                 -> { notas, cfg }
 // GET    /api/notas?foto=ID         -> a foto ou o PDF da nota (decifrado na hora)
 // POST   /api/notas?acao=foto       -> guarda uma foto ou PDF (corpo = arquivo; x-tipo)  -> { foto }
-// PUT    /api/notas { nota }        -> salva uma nota          PUT { cfg } -> centros de custo, categorias, empresas
+// PUT    /api/notas { nota }        -> salva uma nota          PUT { cfg } -> centros de custo, categorias, empresas, recebidos (por conta)
 // DELETE /api/notas?id=ID           -> apaga a nota e as fotos dela
 // Lançamento rápido (x-rapida: 1), SEM senha: só guarda foto e cria nota NOVA. Não lê, não muda e não apaga nada.
 // Redis: hash "notas" (id -> nota), "notas:cfg", hash "notas:fotos" (foto -> onde está + chave).
@@ -97,7 +97,9 @@ export default async function handler(req, res) {
       const b = req.body || {};
       if (b.cfg) {
         const l = (a, n = 60) => [...new Set((Array.isArray(a) ? a : []).map((x) => t(x, 80)).filter(Boolean))].slice(0, n);
-        await redis('SET', 'notas:cfg', JSON.stringify({ centros: l(b.cfg.centros), categorias: l(b.cfg.categorias), empresas: l(b.cfg.empresas), ...(b.cfg.margareth ? { margareth: 1 } : {}) }));
+        // recebidos (26/11/2026): reembolso recebido por conta, sem ser de notas certas. Abate do total "A pedir".
+        const rec = (Array.isArray(b.cfg.recebidos) ? b.cfg.recebidos : []).slice(0, 200).map((r) => ({ id: t(r && r.id, 40), data: data(r && r.data), valor: num(r && r.valor), obs: t(r && r.obs, 200) })).filter((r) => r.id && r.data && r.valor > 0);
+        await redis('SET', 'notas:cfg', JSON.stringify({ centros: l(b.cfg.centros), categorias: l(b.cfg.categorias), empresas: l(b.cfg.empresas), ...(b.cfg.margareth ? { margareth: 1 } : {}), ...(rec.length ? { recebidos: rec } : {}) }));
         return res.json({ ok: true });
       }
       const n = b.nota && limparNota(b.nota); if (!n || !n.id || !n.data) return res.status(400).json({ erro: 'Nota sem data' });
